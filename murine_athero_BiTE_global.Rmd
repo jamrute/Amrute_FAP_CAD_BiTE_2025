@@ -1,0 +1,664 @@
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(sctransform)
+library(ggplot2)
+library(harmony)
+library(ArchR)
+library(ggsci)
+options(future.globals.maxSize = 100000 * 1024^2) # for 50 Gb RAM
+```
+
+###### Preprocessing Steps
+
+# Load the dataset and create a Seurat Object
+```{r}
+SR006237_Control_SMC_dir <- './Lavine_SR006237_10X/SR006237_Control_SMC/filtered_feature_bc_matrix/'
+SR006237_Control_SMC.data <- Read10X(data.dir =SR006237_Control_SMC_dir)
+SR006237_Control_SMC <- CreateSeuratObject(counts = SR006237_Control_SMC.data)
+SR006237_Control_SMC$condition <- "Control"
+
+SR006237_FAP_SMC_dir <- './Lavine_SR006237_10X/SR006237_FAP_SMC/filtered_feature_bc_matrix/'
+SR006237_FAP_SMC_dir.data <- Read10X(data.dir =SR006237_FAP_SMC_dir)
+SR006237_FAP_SMC_dir <- CreateSeuratObject(counts = SR006237_FAP_SMC_dir.data)
+SR006237_FAP_SMC_dir$condition <- "FapBiTE"
+```
+
+```{r}
+sample <- merge(SR006237_Control_SMC, y = c(SR006237_FAP_SMC_dir))
+```
+
+# Look at the features
+```{r}
+sample[["percent.mt"]] <- PercentageFeatureSet(sample, pattern = "^mt-")
+VlnPlot(sample, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size = 0, group.by = "condition")
+```
+
+```{r}
+sample <- subset(sample, subset = nFeature_RNA > 200 & nFeature_RNA < 8000 & percent.mt < 10)
+```
+
+```{r}
+VlnPlot(sample, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, group.by = "condition")
+```
+
+```{r}
+sample <- readRDS("./global/v2/global.rds")
+```
+
+```{r}
+pdf("./percent.mt.pdf", useDingbats = FALSE, width=4, height=3)
+VlnPlot(
+  object = sample,
+  features = c("percent.mt"),
+  ncol = 4,
+  group.by = "orig.ident",
+  pt.size=0
+)
+dev.off()
+```
+
+
+
+# SCTransform and filtering
+```{r}
+DefaultAssay(sample) <- 'RNA'
+sample <- SCTransform(sample, vars.to.regress = c("percent.mt", "nCount_RNA"), verbose = TRUE)
+```
+
+```{r}
+sample <- RunPCA(sample, features = VariableFeatures(object = sample), npcs=50, verbose=TRUE)
+sample <- RunUMAP(sample, reduction = "pca", dims = 1:50)
+sample <- FindNeighbors(sample, reduction = "pca", dims = 1:50)
+sample <- FindClusters(sample, graph.name = "SCT_snn", algorithm = 3, resolution = c(0.3), verbose = FALSE)
+```
+
+```{r}
+DimPlot(sample, reduction = 'umap', label = TRUE, repel = TRUE, label.size = 2.5, group.by = "SCT_snn_res.0.3", cols = paletteDiscrete(unique(sample$SCT_snn_res.0.3), set = "stallion"), split.by = "condition")
+```
+
+```{r}
+FeaturePlot(sample, features = "Spp1")
+```
+
+
+```{r}
+ggplot(sample@meta.data, aes(x=condition, fill=SCT_snn_res.0.3)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(sample$SCT_snn_res.0.3), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+
+# DGE
+```{r}
+Idents(sample) <- "SCT_snn_res.0.3"
+DefaultAssay(sample) <- 'SCT'
+rna.markers <- FindAllMarkers(sample, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.markers, file ="./DE_SCT_snn_res.0.3.csv", quote = FALSE)
+```
+
+```{r}
+saveRDS(sample, "sample.rds")
+```
+
+```{r}
+sample <- readRDS("./global/merged.rds")
+```
+
+```{r}
+Idents(sample) <- "SCT_snn_res.0.3"
+```
+
+```{r}
+fun <- function(x) {
+  if (x == "0") {"SMC"} 
+  else if (x == "1") {"Fibroblast"}
+  else if (x == "2") {"Myeloid"}
+  else if (x == "3") {"modSMC"}
+  else if (x == "4") {"Junk"}
+  else if (x == "5") {"Endothelium"}
+  else if (x == "6") {"Pericyte"}
+  else if (x == "7") {"Junk"}
+  else if (x == "8") {"Myeloid"}
+  else if (x == "9") {"TNKCell"}
+  else if (x == "10") {"Fibroblast"}
+  else if (x == "11") {"Junk"}
+  else if (x == "12") {"Neutrophil"}
+  else if (x == "13") {"Myeloid"}
+  else if (x == "14") {"Junk"}
+  else if (x == "15") {"Mesothelium"}
+  else if (x == "16") {"Lymphatic"}
+  else if (x == "17") {"Glia"}
+  else if (x == "18") {"Proliferating"}
+  else if (x == "19") {"Junk"}
+}
+sample$cell.type <- mapply(fun, sample$SCT_snn_res.0.3)
+```
+
+```{r}
+Idents(sample) <- "cell.type"
+sample <- subset(sample, idents = "Junk", invert = TRUE)
+```
+
+```{r}
+sample <- RunUMAP(sample, reduction = "pca", dims = 1:50)
+sample <- FindNeighbors(sample, reduction = "pca", dims = 1:50)
+sample <- FindClusters(sample, graph.name = "SCT_snn", algorithm = 3, resolution = c(0.1,0.2,0.3,0.4,0.5), verbose = FALSE)
+```
+
+```{r}
+DimPlot(sample, reduction = 'umap', label = FALSE, repel = TRUE, label.size = 2.5, group.by = "cell.type", cols = paletteDiscrete(unique(sample$cell.type), set = "stallion"))
+```
+
+```{r}
+ggplot(sample@meta.data, aes(x=condition, fill=cell.type)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(sample$cell.type), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+
+```
+
+
+```{r}
+celltype <- unique(sample$cell.type)
+for (cell in celltype) {
+  Idents(sample) <- "cell.type"
+  curr_subset <- subset(sample, idents = cell)
+  
+  Idents(curr_subset) <- "condition"
+  DefaultAssay(curr_subset) <- 'SCT'
+  rna.markers <- FindAllMarkers(curr_subset, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+  write.csv(rna.markers, file =paste0("./global/v2/DE_lists/DE_IsovsFAPBiTE_", cell, ".csv"), quote = FALSE)
+}
+```
+
+```{r}
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(sctransform)
+library(ggplot2)
+library(pheatmap)
+library(Seurat)
+library(ggplot2)
+library(Matrix)
+library(RColorBrewer)
+library(dplyr)
+library(scales)
+library(data.table)
+library(stats)
+library("Nebulosa")
+library(tidyverse)
+library(hrbrthemes)
+library(viridis)
+library(magrittr)
+library(dplyr)
+```
+```{r}
+avg_log2FC_cutoff <- 0.25
+```
+
+```{r}
+Endothelium <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Endothelium.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Endothelium$cell <- "Endothelium"
+Endothelium$sigpvalue <- ifelse(Endothelium$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Endothelium$sig <- ifelse(Endothelium$p_val_adj < 0.05 & Endothelium$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Fibroblast <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Fibroblast.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Fibroblast$cell <- "Fibroblast"
+Fibroblast$sigpvalue <- ifelse(Fibroblast$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Fibroblast$sig <- ifelse(Fibroblast$p_val_adj < 0.05 & Fibroblast$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Glia <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Glia.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Glia$cell <- "Glia"
+Glia$sigpvalue <- ifelse(Glia$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Glia$sig <- ifelse(Glia$p_val_adj < 0.05 & Glia$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Lymphatic <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Lymphatic.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Lymphatic$cell <- "Lymphatic"
+Lymphatic$sigpvalue <- ifelse(Lymphatic$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Lymphatic$sig <- ifelse(Lymphatic$p_val_adj < 0.05 & Lymphatic$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Mesothelium <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Mesothelium.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Mesothelium$cell <- "Mesothelium"
+Mesothelium$sigpvalue <- ifelse(Mesothelium$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Mesothelium$sig <- ifelse(Mesothelium$p_val_adj < 0.05 & Mesothelium$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+modSMC <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_modSMC.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+modSMC$cell <- "modSMC"
+modSMC$sigpvalue <- ifelse(modSMC$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+modSMC$sig <- ifelse(modSMC$p_val_adj < 0.05 & modSMC$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Myeloid <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Myeloid.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Myeloid$cell <- "Myeloid"
+Myeloid$sigpvalue <- ifelse(Myeloid$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Myeloid$sig <- ifelse(Myeloid$p_val_adj < 0.05 & Myeloid$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Neutrophil <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Neutrophil.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Neutrophil$cell <- "Neutrophil"
+Neutrophil$sigpvalue <- ifelse(Neutrophil$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Neutrophil$sig <- ifelse(Neutrophil$p_val_adj < 0.05 & Neutrophil$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Pericyte <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Pericyte.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Pericyte$cell <- "Pericyte"
+Pericyte$sigpvalue <- ifelse(Pericyte$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Pericyte$sig <- ifelse(Pericyte$p_val_adj < 0.05 & Pericyte$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+Proliferating <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_Proliferating.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+Proliferating$cell <- "Proliferating"
+Proliferating$sigpvalue <- ifelse(Proliferating$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+Proliferating$sig <- ifelse(Proliferating$p_val_adj < 0.05 & Proliferating$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+SMC <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_SMC.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+SMC$cell <- "SMC"
+SMC$sigpvalue <- ifelse(SMC$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+SMC$sig <- ifelse(SMC$p_val_adj < 0.05 & SMC$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+
+TNKCell <- read_delim("./global/v2/DE_lists/DE_IsovsFAPBiTE_TNKCell.csv", ",", escape_double = FALSE, trim_ws = TRUE)
+TNKCell$cell <- "TNKCell"
+TNKCell$sigpvalue <- ifelse(TNKCell$p_val_adj < 0.05, "p < 0.05","p > 0.05")
+TNKCell$sig <- ifelse(TNKCell$p_val_adj < 0.05 & TNKCell$avg_log2FC > avg_log2FC_cutoff, "Significant","Not Significant")
+```
+
+```{r}
+#create data frame
+data <- data.frame(rbind(Endothelium,Fibroblast,Glia,Lymphatic,Mesothelium,modSMC,Myeloid,Neutrophil,Pericyte,Proliferating,SMC,TNKCell))
+data$cell <- factor(data$cell, levels = c("Endothelium","Fibroblast","Glia","Lymphatic","Mesothelium","modSMC","Myeloid","Neutrophil","Pericyte","Proliferating","SMC","TNKCell"))
+data$avg_log2FC <- ifelse(data$cluster == "Control", data$avg_log2FC, -1 * data$avg_log2FC)
+table(data$cell, data$sig)
+```
+
+```{r}
+df_Count <- data %>% group_by(sig, cell) %>% dplyr::count()
+df_Count <- data.frame(df_Count)
+
+x <- df_Count[with(df_Count,order(n,decreasing = T)) ,][df_Count[with(df_Count,order(n, decreasing = T)) ,]$sig=="Significant",]$cell
+df_Count$cell <- factor(df_Count$cell, levels = x)
+
+data$cell <- factor(data$cell, levels = x)
+data %>%
+  ggplot(aes(x=cell, y=avg_log2FC, fill=cell, color=sig)) +
+  geom_jitter(size=1, alpha=0.5, position=position_jitter(0.2)) + 
+  theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + theme(panel.border = element_blank(), panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"), legend.position="none") + scale_y_continuous(limits = c(-1, 1)) +
+  ggtitle("Pseudobulk DE WT_vs_KO") +
+  xlab("Cell types") +
+  scale_shape_manual(values=c(1,1))+
+  scale_color_manual(values=c("grey", "red"))
+```
+
+```{r}
+data$cluster <- ifelse(data$avg_log2FC > 0, "Control", "anti-FAP BiTE")
+```
+
+```{r}
+pdf("./stack_DE.pdf", useDingbats = FALSE, width=3.5, height=2)
+
+df_Count <- data %>% group_by(sig, cell) %>% dplyr::count(cluster)
+df_Count <- data.frame(df_Count)
+
+df_Count$cell <- factor(df_Count$cell)
+df_Count <- filter(df_Count, df_Count$sig == "Significant")
+ggplot(df_Count, aes(x = cell, y = n, fill = cluster)) + geom_col() + labs(x="Cell Type", y="#Genes", fill="Significance") + scale_fill_manual(values = c("dodgerblue4", "red3")) + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+dev.off()
+```
+
+# AUGR
+```{r}
+library(Augur)
+```
+
+```{r}
+sample_AUGR <- calculate_auc(sample, label_col = "condition", cell_type_col = "cell.type")
+```
+
+```{r}
+df_AUGR <- sample_AUGR$AUC
+```
+
+```{r}
+df_AUGR
+```
+
+
+# SMC
+```{r}
+Idents(sample) <- "cell.type"
+stroma <- subset(sample, idents = c("SMC","Pericyte","Fibroblast","modSMC"))
+```
+
+```{r}
+stroma <- RunUMAP(stroma, reduction = "pca", dims = 1:50)
+stroma <- FindNeighbors(stroma, reduction = "pca", dims = 1:50)
+stroma <- FindClusters(stroma, graph.name = "SCT_snn", algorithm = 3, resolution = c(0.1,0.2,0.3,0.4,0.5), verbose = FALSE)
+```
+
+```{r}
+DimPlot(stroma, reduction = 'umap', label = FALSE, repel = TRUE, label.size = 2.5, group.by = "SCT_snn_res.0.5", cols = paletteDiscrete(unique(stroma$SCT_snn_res.0.5), set = "stallion"), ncol = 2)
+```
+
+```{r}
+FeaturePlot(stroma, features = c("Myh11","Tnfrsf11b"))
+```
+
+```{r}
+ggplot(stroma@meta.data, aes(x=condition, fill=SCT_snn_res.0.5)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(stroma$SCT_snn_res.0.5), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+Idents(stroma) <- "SCT_snn_res.0.5"
+DefaultAssay(stroma) <- 'SCT'
+rna.markers <- FindAllMarkers(stroma, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.markers, file ="./stroma/DE_SCT_snn_res.0.5.csv", quote = FALSE)
+```
+
+```{r}
+fun <- function(x) {
+  if (x == "0") {"SMC1"} 
+  else if (x == "1") {"Fib1"}
+  else if (x == "2") {"SMC2"}
+  else if (x == "3") {"FMC2"}
+  else if (x == "4") {"FMC1"}
+  else if (x == "5") {"Pericyte"}
+  else if (x == "6") {"Fib2"}
+  else if (x == "7") {"Fib3"}
+  else if (x == "8") {"Fib4"}
+}
+stroma$cell.state <- mapply(fun, stroma$SCT_snn_res.0.5)
+```
+
+```{r}
+stroma$cell.state <- factor(stroma$cell.state, levels = c("Pericyte","SMC1","SMC2","FMC1","FMC2","Fib1","Fib2","Fib3","Fib4"))
+```
+
+```{r}
+DimPlot(stroma, reduction = 'umap', label = FALSE, repel = TRUE, label.size = 2.5, group.by = "cell.state", cols = paletteDiscrete(unique(stroma$cell.state), set = "stallion"), ncol = 2)
+```
+
+```{r}
+ggplot(stroma@meta.data, aes(x=condition, fill=cell.state)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(stroma$cell.state), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+pdf("./marker_dotplot.pdf", useDingbats = FALSE, width=5.5, height=3.5)
+DotPlot(stroma, features = c("Rgs5","Kcnip4","Myh11","Acta2","Wnt16","Itih4","Tnfrsf11b","Fap","Abca8a","Fbln1")) + RotatedAxis()
+dev.off()
+```
+
+
+```{r}
+Idents(stroma) <- "cell.state"
+SMCs <- subset(stroma, idents = c("Pericyte","SMC1","SMC2","FMC1","FMC2"))
+```
+
+```{r}
+DefaultAssay(SMCs) <- "SCT"
+SMCs <- AddModuleScore(
+	  object = SMCs,
+	  features = list(c("Cnn1","Fap","Runx1","Tnfrsf11b","Dcn","Crip1","Spp1","Ccn2","Ltbp2","Col4a1","Ccn1","Atf3","Ccn5","Jun","Fos")),
+	  name = 'FMCz'
+)
+```
+
+```{r}
+pdf("./human_FMCz.pdf", useDingbats = FALSE, width=2.5, height=3)
+VlnPlot(SMCs, features = "FMCz1", group.by = "condition", pt.size = 0)
+dev.off()
+```
+
+
+```{r}
+stroma <- readRDS("./stroma/stroma.rds")
+```
+
+```{r}
+pdf("./Fap_dotplot.pdf", useDingbats = FALSE, width=3.5, height=3.5)
+DotPlot(stroma, features = "Fap", group.by = "cell.state") + RotatedAxis()
+dev.off()
+```
+
+```{r}
+mouse_paul <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/Mouse_mapping/Quetermous_Mapping/Cheng_Zeb2/16wkhfdctl.rds")
+```
+
+```{r}
+stroma <- NormalizeData(stroma)
+#sample <- FindVariableFeatures(sample, selection.method = "vst", nfeatures = 3000)
+#sample <- ScaleData(sample)
+```
+
+```{r}
+anchors <- FindTransferAnchors(reference = mouse_paul, query = stroma, dims = 1:30, reference.reduction = "pca", reference.assay = "RNA", query.assay = "RNA")
+```
+
+```{r}
+predictions <- TransferData(anchorset = anchors, refdata = mouse_paul$Genotype, dims = 1:30)
+stroma <- AddMetaData(stroma, metadata = predictions)
+```
+```{r}
+stroma$predicted.id <- factor(stroma$predicted.id, levels = c("Ctl-tdt","Ctl-NOtdt"))
+```
+
+```{r}
+DimPlot(stroma, reduction = 'umap', label = FALSE, repel = TRUE, label.size = 2.5, group.by = "cell.state", cols = paletteDiscrete(unique(stroma$cell.state), set = "stallion"), split.by = "predicted.id")
+```
+
+```{r}
+saveRDS(stroma, "stroma_ref_mapped.rds")
+```
+
+##################################################
+
+```{r}
+stroma <- readRDS("./stroma/stroma_ref_mapped.rds")
+```
+
+# tdT+ vs tdT-
+```{r}
+Idents(stroma) <- "predicted.id"
+tdtPos <- subset(stroma, idents = "Ctl-tdt")
+tdtNeg <- subset(stroma, idents = "Ctl-NOtdt")
+```
+
+```{r}
+Idents(tdtPos) <- "condition"
+DefaultAssay(tdtPos) <- 'SCT'
+rna.markers.tdtPos <- FindAllMarkers(tdtPos, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.markers.tdtPos, file ="./stroma/DE_tdTPos_condition.csv", quote = FALSE)
+```
+
+```{r}
+Idents(tdtNeg) <- "condition"
+DefaultAssay(tdtNeg) <- 'SCT'
+rna.markers.tdtNeg <- FindAllMarkers(tdtNeg, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.markers.tdtNeg, file ="./stroma/DE_tdtNeg_condition.csv", quote = FALSE)
+```
+
+```{r}
+rna.markers.tdtPos <- subset.data.frame(rna.markers.tdtPos, rna.markers.tdtPos$p_val_adj < 0.05)
+rna.markers.tdtPos.Control <- subset.data.frame(rna.markers.tdtPos, rna.markers.tdtPos$cluster == "Control")
+```
+
+```{r}
+rna.markers.tdtNeg <- subset.data.frame(rna.markers.tdtNeg, rna.markers.tdtNeg$p_val_adj < 0.05)
+rna.markers.tdtNeg.Control <- subset.data.frame(rna.markers.tdtNeg, rna.markers.tdtNeg$cluster == "Control")
+```
+
+
+# Pathways
+```{r}
+library(readr)
+library(clusterProfiler)
+library(org.Mm.eg.db)
+
+genes <- rna.markers.tdtNeg.Control$gene
+
+genes <- unique(genes)
+
+mapping <- bitr(genes,
+                fromType = "SYMBOL",
+                toType   = "ENTREZID",
+                OrgDb    = org.Mm.eg.db)
+
+entrez <- mapping$ENTREZID
+```
+
+# GO
+```{r}
+ego <- enrichGO(gene         = entrez,
+                OrgDb        = org.Mm.eg.db,
+                keyType      = "ENTREZID",
+                ont          = "MF",       # or "MF", "CC"
+                pAdjustMethod= "BH",
+                qvalueCutoff = 0.05)
+```
+
+```{r}
+pdf("./GO_MF_tdtNeg_downBiTE.pdf", useDingbats = FALSE, width=5, height=7)
+dotplot(ego, showCategory = 20, font.size = 10)
+dev.off()
+```
+
+
+# Myeloid
+```{r}
+Idents(sample) <- "cell.type"
+Myeloid <- subset(sample, idents = c("Myeloid"))
+```
+
+```{r}
+Myeloid <- RunUMAP(Myeloid, reduction = "pca", dims = 1:50)
+Myeloid <- FindNeighbors(Myeloid, reduction = "pca", dims = 1:50)
+Myeloid <- FindClusters(Myeloid, graph.name = "SCT_snn", algorithm = 3, resolution = c(0.1,0.2,0.3,0.4,0.5), verbose = FALSE)
+```
+
+```{r}
+DimPlot(Myeloid, reduction = 'umap', label = FALSE, repel = TRUE, label.size = 2.5, group.by = "SCT_snn_res.0.5", cols = paletteDiscrete(unique(Myeloid$SCT_snn_res.0.5), set = "stallion"), ncol = 2)
+```
+
+```{r}
+ggplot(Myeloid@meta.data, aes(x=condition, fill=SCT_snn_res.0.5)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(Myeloid$SCT_snn_res.0.5), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+Idents(Myeloid) <- "SCT_snn_res.0.5"
+DefaultAssay(Myeloid) <- 'SCT'
+rna.markers <- FindAllMarkers(Myeloid, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.markers, file ="./Myeloid/DE_SCT_snn_res.0.5.csv", quote = FALSE)
+```
+
+```{r}
+Idents(Myeloid) <- "SCT_snn_res.0.5"
+Myeloid <- subset(Myeloid, idents = "3", invert = TRUE)
+```
+
+```{r}
+Myeloid <- RunUMAP(Myeloid, reduction = "pca", dims = 1:50)
+```
+
+```{r}
+DimPlot(Myeloid, reduction = 'umap', label = FALSE, repel = TRUE, label.size = 2.5, group.by = "SCT_snn_res.0.5", cols = paletteDiscrete(unique(Myeloid$SCT_snn_res.0.5), set = "stallion"), ncol = 2)
+```
+
+```{r}
+ggplot(Myeloid@meta.data, aes(x=condition, fill=SCT_snn_res.0.5)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(Myeloid$SCT_snn_res.0.5), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+Idents(Myeloid) <- "SCT_snn_res.0.5"
+DefaultAssay(Myeloid) <- 'SCT'
+rna.markers <- FindAllMarkers(Myeloid, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.markers, file ="./myeloid/v2/DE_Myeloid_SCT_snn_res.0.5.csv", quote = FALSE)
+```
+
+```{r}
+fun <- function(x) {
+  if (x == "0") {"Mac1"} 
+  else if (x == "1") {"Mac2"}
+  else if (x == "2") {"Mac4"}
+  else if (x == "4") {"Mac3"}
+  else if (x == "5") {"cDC2"}
+  else if (x == "6") {"Mono"}
+  else if (x == "7") {"cDC1"}
+  else if (x == "8") {"mDC"}
+}
+Myeloid$cell.state <- mapply(fun, Myeloid$SCT_snn_res.0.5)
+```
+
+```{r}
+Myeloid$cell.state <- factor(Myeloid$cell.state, levels = c("Mono","Mac1","Mac2","Mac3","Mac4","cDC1","cDC2","mDC"))
+```
+
+```{r}
+DimPlot(Myeloid, reduction = 'umap', label = FALSE, repel = TRUE, label.size = 2.5, group.by = "cell.state", cols = paletteDiscrete(unique(Myeloid$cell.state), set = "stallion"), ncol = 2)
+```
+
+```{r}
+ggplot(Myeloid@meta.data, aes(x=condition, fill=cell.state)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(Myeloid$cell.state), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+Idents(Myeloid) <- "cell.state"
+DefaultAssay(Myeloid) <- 'SCT'
+rna.markers <- FindAllMarkers(Myeloid, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.markers, file ="./myeloid/v2/DE_Myeloid_cell.state.csv", quote = FALSE)
+```
+
+```{r}
+FeaturePlot(Myeloid, features = c("Gpnmb"), split.by = "condition")
+```
+
+```{r}
+pdf("./marker_myeloid_dotplot.pdf", useDingbats = FALSE, width=6.3, height=3.5)
+DotPlot(Myeloid, features = c("Ly6c2","Plac8","Pparg","Apbb2","Fabp4","Fabp5","Gpnmb","Ctsl","Spp1","Cd163","F13a1","Clec9a","Cd209a","Ccr7")) + RotatedAxis()
+dev.off()
+```
+
+
+```{r}
+DefaultAssay(Myeloid) <- "SCT"
+Myeloid <- AddModuleScore(
+	  object = Myeloid,
+	  features = list(c("Fabp4","Fabp5","Gpnmb","Ctsl","Spp1")),
+	  name = 'LAMz'
+)
+```
+
+```{r}
+pdf("./LAMz1_myeloid_dotplot.pdf", useDingbats = FALSE, width=3.3, height=3.5)
+DotPlot(Myeloid, features = c("LAMz1")) + RotatedAxis()
+dev.off()
+```
+
+
+```{r}
+#pdf("./Spp1.pdf", useDingbats = FALSE, width=2.5, height=3)
+VlnPlot(Myeloid, features = c("Ctsl"), group.by = "condition", pt.size = 0)
+#dev.off()
+```
+
+

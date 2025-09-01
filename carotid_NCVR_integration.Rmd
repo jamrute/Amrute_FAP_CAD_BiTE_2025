@@ -1,0 +1,312 @@
+```{r}
+library(Seurat)
+library(SeuratDisk)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(SeuratDisk)
+library(ArchR)
+library(Matrix)
+library(data.table)
+library(Seurat)
+library(dplyr)
+library(gt)
+library(igraph)
+library(RColorBrewer)
+library(compositions)
+library(harmony)
+library(compositions)
+library(tidyverse)
+library(clustree)
+library(uwot)
+library(scran)
+library(cluster)
+```
+
+```{r}
+library(SeuratDisk)
+options(future.globals.maxSize = 50000 * 1024^2) # for 50 Gb RAM
+# Convert h5ad to h5Seurat
+Convert("new_SIKANDER.h5ad", dest = "h5seurat", overwrite = TRUE)
+```
+```{r}
+# Load as Seurat object
+merged <- LoadH5Seurat("new_SIKANDER.h5seurat")
+```
+
+```{r}
+library(Seurat)
+library(readr)
+library(dplyr)
+
+meta <- read_tsv("metadata.tsv", show_col_types = FALSE)
+meta <- as.data.frame(meta)
+meta <- meta %>% filter(barcode %in% colnames(merged)) %>% distinct(barcode, .keep_all = TRUE)
+rownames(meta) <- meta$barcode; meta$barcode <- NULL
+merged <- AddMetaData(merged, metadata = meta[colnames(merged), , drop = FALSE])
+```
+
+```{r}
+library(remotes)
+#remotes::install_github("carmonalab/GeneNMF") #from Github
+library(GeneNMF)
+library(Seurat)
+library(ggplot2)
+library(UCell)
+library(patchwork)
+library(Matrix)
+library(RcppML)
+library(viridis)
+```
+
+```{r}
+library(scCustomize)
+merged <- SCTransform(merged, assay = "RNA", verbose = TRUE)
+```
+
+```{r}
+seu <- merged
+```
+
+```{r}
+ndim <- 30
+
+seu <- FindVariableFeatures(seu, nfeatures = 3000)
+seu <- runNMF(seu, k = ndim, assay="SCT")
+```
+
+```{r}
+seu.list <- SplitObject(seu, split.by = "sample")
+geneNMF.programs <- multiNMF(seu.list, assay="SCT", slot="data", k=4:9, nfeatures = 3000)
+```
+
+```{r}
+geneNMF.metaprograms <- getMetaPrograms(geneNMF.programs,
+                                        nMP=10,
+                                        weight.explained = 0.7,
+                                        max.genes=100)
+```
+
+```{r}
+plotMetaPrograms(geneNMF.metaprograms)
+```
+
+```{r}
+geneNMF.metaprograms$metaprograms.metrics
+```
+
+```{r}
+lapply(geneNMF.metaprograms$metaprograms.genes, head)
+```
+
+```{r}
+MP1_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP1)
+MP1_genes$MP <- "MP1"
+colnames(MP1_genes) <- c("gene","MP")
+
+MP2_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP2)
+MP2_genes$MP <- "MP2"
+colnames(MP2_genes) <- c("gene","MP")
+
+MP3_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP3)
+MP3_genes$MP <- "MP3"
+colnames(MP3_genes) <- c("gene","MP")
+
+MP4_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP4)
+MP4_genes$MP <- "MP4"
+colnames(MP4_genes) <- c("gene","MP")
+
+MP5_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP5)
+MP5_genes$MP <- "MP5"
+colnames(MP5_genes) <- c("gene","MP")
+
+MP6_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP6)
+MP6_genes$MP <- "MP6"
+colnames(MP6_genes) <- c("gene","MP")
+
+MP7_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP7)
+MP7_genes$MP <- "MP7"
+colnames(MP7_genes) <- c("gene","MP")
+
+MP8_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP8)
+MP8_genes$MP <- "MP8"
+colnames(MP8_genes) <- c("gene","MP")
+
+MP9_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP9)
+MP9_genes$MP <- "MP9"
+colnames(MP9_genes) <- c("gene","MP")
+
+MP10_genes <- data.frame(geneNMF.metaprograms$metaprograms.genes$MP10)
+MP10_genes$MP <- "MP10"
+colnames(MP10_genes) <- c("gene","MP")
+```
+
+```{r}
+MP_genes <- bind_rows(MP1_genes, MP2_genes, MP3_genes, MP4_genes, MP5_genes, MP6_genes, MP7_genes, MP8_genes, MP9_genes, MP10_genes)
+```
+
+```{r}
+write.csv(MP_genes, file ="./Sikander_MP_genes.csv", quote = FALSE)
+```
+
+
+
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(reshape2)
+library(dplyr)
+library(RColorBrewer)
+library(pheatmap)
+
+# Read the CSV files
+# Replace 'MP_genes_CA.csv' and 'Sikander_MP_genes.csv' with your actual file paths
+ca_data <- read.csv("MP_genes_CA.csv", stringsAsFactors = FALSE)
+sikander_data <- read.csv("Sikander_MP_genes.csv", stringsAsFactors = FALSE)
+
+# Add dataset identifier
+ca_data$dataset <- "CA"
+sikander_data$dataset <- "Sikander"
+
+# Combine datasets
+combined_data <- rbind(ca_data, sikander_data)
+
+# Create unique MP identifiers by combining dataset and MP
+combined_data$MP_unique <- paste(combined_data$dataset, combined_data$MP, sep = "_")
+
+# Function to calculate Jaccard Index
+jaccard_index <- function(set1, set2) {
+  intersection <- length(intersect(set1, set2))
+  union <- length(union(set1, set2))
+  return(intersection / union)
+}
+
+# Get unique MP identifiers
+unique_mps <- unique(combined_data$MP_unique)
+
+# Create gene lists for each MP
+mp_gene_lists <- lapply(unique_mps, function(mp) {
+  combined_data$gene[combined_data$MP_unique == mp]
+})
+names(mp_gene_lists) <- unique_mps
+
+# Calculate Jaccard index matrix
+n_mps <- length(unique_mps)
+jaccard_matrix <- matrix(0, nrow = n_mps, ncol = n_mps)
+rownames(jaccard_matrix) <- unique_mps
+colnames(jaccard_matrix) <- unique_mps
+
+# Fill the matrix
+for(i in 1:n_mps) {
+  for(j in 1:n_mps) {
+    jaccard_matrix[i, j] <- jaccard_index(mp_gene_lists[[i]], mp_gene_lists[[j]])
+  }
+}
+
+# Create heatmap using pheatmap
+pheatmap(jaccard_matrix,
+         main = "Jaccard Index Heatmap: Gene Overlap Between MPs",
+         color = colorRampPalette(c("white", "lightblue", "blue", "darkblue"))(100),
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         display_numbers = TRUE,
+         number_format = "%.2f",
+         fontsize_number = 8,
+         cellwidth = 30,
+         cellheight = 30,
+         angle_col = 45)
+
+# Alternative heatmap using ggplot2
+# Melt the matrix for ggplot
+jaccard_df <- melt(jaccard_matrix)
+colnames(jaccard_df) <- c("MP1", "MP2", "Jaccard_Index")
+
+# Create ggplot heatmap
+ggplot_heatmap <- ggplot(jaccard_df, aes(x = MP2, y = MP1, fill = Jaccard_Index)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "white", mid = "lightblue", high = "darkblue", 
+                       midpoint = 0.5, name = "Jaccard\nIndex") +
+  geom_text(aes(label = round(Jaccard_Index, 2)), size = 3) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1),
+        axis.text.y = element_text(size = 10),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+  labs(title = "Jaccard Index Heatmap: Gene Overlap Between MPs",
+       x = "Molecular Phenotype",
+       y = "Molecular Phenotype")
+
+# Display the ggplot heatmap
+print(ggplot_heatmap)
+
+# Print summary statistics
+cat("Summary of Jaccard Index values:\n")
+print(summary(as.vector(jaccard_matrix[upper.tri(jaccard_matrix)])))
+
+# Print number of genes per MP
+cat("\nNumber of genes per MP:\n")
+gene_counts <- sapply(mp_gene_lists, length)
+print(gene_counts)
+
+# Create a separate comparison matrix just between datasets
+# (CA MPs vs Sikander MPs)
+ca_mps <- unique(ca_data$MP)
+sikander_mps <- unique(sikander_data$MP)
+
+# Create cross-dataset comparison matrix
+cross_jaccard_matrix <- matrix(0, nrow = length(ca_mps), ncol = length(sikander_mps))
+rownames(cross_jaccard_matrix) <- paste("CA", ca_mps, sep = "_")
+colnames(cross_jaccard_matrix) <- paste("Sikander", sikander_mps, sep = "_")
+
+for(i in 1:length(ca_mps)) {
+  ca_genes <- ca_data$gene[ca_data$MP == ca_mps[i]]
+  for(j in 1:length(sikander_mps)) {
+    sikander_genes <- sikander_data$gene[sikander_data$MP == sikander_mps[j]]
+    cross_jaccard_matrix[i, j] <- jaccard_index(ca_genes, sikander_genes)
+  }
+}
+```
+
+```{r}
+# Create cross-dataset heatmap
+pdf("./Cross-Dataset Jaccard Index.pdf", useDingbats = FALSE, width=5, height=5)
+pheatmap(cross_jaccard_matrix,
+         main = "Cross-Dataset Jaccard Index: CA vs Sikander MPs",
+         color = colorRampPalette(c("white", "lightcoral", "red", "darkred"))(100),
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         display_numbers = FALSE,
+         cellwidth = 10,
+         cellheight = 10,
+         angle_col = 45,
+         border_color=NA)
+dev.off()
+
+# Print cross-dataset summary
+cat("\nCross-dataset Jaccard Index summary (CA vs Sikander):\n")
+print(summary(as.vector(cross_jaccard_matrix)))
+
+# Find highest overlap between datasets
+max_jaccard <- max(cross_jaccard_matrix)
+max_indices <- which(cross_jaccard_matrix == max_jaccard, arr.ind = TRUE)
+cat("\nHighest cross-dataset overlap:\n")
+for(k in 1:nrow(max_indices)) {
+  i <- max_indices[k, 1]
+  j <- max_indices[k, 2]
+  cat(sprintf("%s vs %s: Jaccard Index = %.3f\n", 
+              rownames(cross_jaccard_matrix)[i], 
+              colnames(cross_jaccard_matrix)[j], 
+              max_jaccard))
+}
+
+```
+
+
+```{r}
+
+```
+

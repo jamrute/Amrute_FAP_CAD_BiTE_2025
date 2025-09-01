@@ -1,0 +1,1217 @@
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+#library(SeuratDisk)
+library(sctransform)
+library(ggplot2)
+library(harmony)
+library(ArchR)
+library(ggsci)
+```
+
+```{r}
+sample <- readRDS("SMCPericyte_Fibroblast.rds")
+```
+
+```{r}
+DefaultAssay(sample) <- "RNA"
+sample <- NormalizeData(sample)
+sample <- FindVariableFeatures(sample, selection.method = "vst", nfeatures = 3000)
+sample <- ScaleData(sample)
+```
+
+```{r}
+DefaultAssay(sample) <- "ADT"
+sample <- NormalizeData(sample, normalization.method = 'CLR', margin = 2) %>% ScaleData()
+```
+
+```{r}
+sample <- FindClusters(sample, graph.name = "RNA_snn", algorithm = 3, resolution = c(0.4,0.5,0.6,0.7), verbose = FALSE)
+```
+
+```{r}
+saveRDS(sample, "./SMCPericyte_Fibroblast.rds")
+```
+
+```{r}
+DimPlot(sample, reduction = 'rna.umap', group.by = 'RNA_snn_res.0.7',label.size = 4,label=TRUE, cols = paletteDiscrete(unique(sample$RNA_snn_res.0.7), set = "stallion"))
+```
+
+```{r}
+fun <- function(x) {
+  if (x == "0") {"Fib2"} 
+  else if (x == "1") {"SMC2"}
+  else if (x == "2") {"SMC1"}
+  else if (x == "3") {"Fib5"}
+  else if (x == "4") {"SMC3"}
+  else if (x == "5") {"CMC"}
+  else if (x == "6") {"FMC"}
+  else if (x == "7") {"Fib1"}
+  else if (x == "8") {"Pericyte"}
+  else if (x == "9") {"Fib6"}
+  else if (x == "10") {"Fib4"}
+  else if (x == "11") {"Fib7"}
+  else if (x == "12") {"SMC4"}
+  else if (x == "13") {"Fib3"}
+}
+sample$cell.state <- mapply(fun, sample$RNA_snn_res.0.7)
+sample$cell.state <- factor(sample$cell.state, levels = c("Pericyte","SMC1","SMC2","SMC3","SMC4","FMC","CMC","Fib1","Fib2","Fib3","Fib4","Fib5","Fib6","Fib7"))
+```
+
+```{r}
+DimPlot(sample, reduction = 'rna.umap', group.by = 'cell.state',label.size = 4,label=FALSE, cols = paletteDiscrete(unique(sample$cell.state), set = "stallion"))
+```
+
+```{r}
+DefaultAssay(sample) <- 'RNA'
+Idents(sample) <- "cell.state"
+rna.rnamarkers <- FindAllMarkers(sample, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.rnamarkers, file ="./DE_RNA_cell.state.csv", quote = FALSE)
+```
+
+# GEX
+```{r}
+rna.rnamarkers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+```
+
+```{r}
+DoHeatmap(sample, features = top10$gene, assay = "RNA", group.colors = paletteDiscrete(unique(sample$cell.state), set = "stallion"), size = 2, angle = 90) + NoLegend() + scale_fill_gradientn(colours=paletteContinuous("solarExtra"))
+
+ggsave(filename="heatmap_DE_RNA_cell.state.pdf")
+```
+
+# ADT
+```{r}
+DefaultAssay(sample) <- 'ADT'
+Idents(sample) <- "cell.state"
+rna.rnamarkers <- FindAllMarkers(sample, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.1)
+write.csv(rna.rnamarkers, file ="./DE_ADT_cell.state.csv", quote = FALSE)
+```
+
+```{r}
+rna.rnamarkers %>%
+    group_by(cluster) %>%
+    top_n(n = 10, wt = avg_log2FC) -> top10
+```
+
+```{r}
+DoHeatmap(sample, features = top10$gene, assay = "ADT", group.colors = paletteDiscrete(unique(sample$cell.state), set = "stallion"), size = 2, angle = 90) + NoLegend() + scale_fill_gradientn(colours=paletteContinuous("blueYellow"))
+
+ggsave(filename="heatmap_ADT.pdf")
+```
+
+```{r}
+saveRDS(sample, "SMCPericyte_Fibroblast.rds")
+```
+
+```{r}
+sample <- readRDS("smc_fib_annotated.rds")
+```
+
+```{r}
+DefaultAssay(sample) <- "SCT"
+DotPlot(sample, features = c("IFIH1","FAP"), group.by = "cell.state")
+```
+
+```{r}
+DefaultAssay(sample) <- "SCT"
+FeaturePlot(sample, features = "ITGA2")
+```
+
+
+# Ref Map Owens Data
+```{r}
+owens_global_mapped <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/CAD_Project/Projects/CITE-seq\ Atlas/analysis/final_analysis/Owens_Mapping/reference_mapped.rds")
+```
+
+```{r}
+mouse_old <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/CAD_Project/Projects/CITE-seq\ Atlas/analysis/final_analysis/Owens_Mapping/mouse_humanHomolog_normalized.rds")
+```
+
+```{r}
+mouse_coronary <- UpdateSeuratObject(mouse_old)
+```
+
+# Create a New Seurat Object
+```{r}
+mouse_coronary_new <- CreateSeuratObject(counts = mouse_coronary@assays[["RNA"]]@counts)
+mouse_coronary_new <- AddMetaData(object = mouse_coronary_new, metadata = mouse_coronary@meta.data)
+```
+
+```{r}
+mouse_coronary_new$predicted.celltype <- owens_global_mapped$predicted.celltype
+```
+
+```{r}
+Idents(mouse_coronary_new) <- "predicted.celltype"
+owens_SMC <- subset(mouse_coronary_new, idents = c("ModSMC","SMCPericyte","Fibroblast1"))
+```
+
+# Process the Mouse DataSet
+```{r}
+DefaultAssay(owens_SMC) <- "RNA"
+owens_SMC <- NormalizeData(owens_SMC)
+owens_SMC <- FindVariableFeatures(owens_SMC, selection.method = "vst", nfeatures = 3000)
+owens_SMC <- ScaleData(owens_SMC)
+```
+
+# Reference Mapping
+```{r}
+sample <- RunSPCA(sample, assay = 'RNA', graph = 'RNA_snn')
+```
+
+```{r}
+anchors <- FindTransferAnchors(
+  reference = sample,
+  query = owens_SMC,
+  normalization.method = "LogNormalize",
+  reference.reduction = "spca",
+  dims = 1:50,
+  reference.assay = "RNA"
+)
+```
+
+```{r}
+owens_SMC <- MapQuery(
+  anchorset = anchors,
+  query = owens_SMC,
+  reference = sample,
+  refdata = list(
+    celltype = "RNA_snn_res.0.3",
+    predicted_ADT = "ADT"),
+  reference.reduction = "spca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+DimPlot(owens_SMC, reduction = "ref.umap", group.by = "predicted.celltype",label.size = 4,
+        cols = paletteDiscrete(unique(sample$RNA_snn_res.0.3), set = "stallion"), label = FALSE)
+```
+
+```{r}
+Idents(owens_SMC) <- "orig.cell"
+owens_SMC$orig.ident <- factor(owens_SMC$orig.ident, levels = c("SMC", "Endothelial", "Other"))
+```
+
+```{r}
+DimPlot(owens_SMC, reduction = "ref.umap", group.by = "orig.cell", label = FALSE, label.size = 3 ,repel = TRUE, pt.size = 0.01, shuffle=TRUE) + scale_colour_manual(values = c("grey", "grey", "red"), na.value = "grey")
+
+DimPlot(owens_SMC, reduction = "ref.umap", group.by = "orig.cell", label = FALSE, label.size = 3 ,repel = TRUE, pt.size = 0.01, shuffle=TRUE) + scale_colour_manual(values = c("blue", "grey", "grey"), na.value = "grey") 
+```
+
+```{r}
+owens_SMC$SEURATPROJECT <- "SMCs"
+```
+
+```{r}
+ggplot(owens_SMC@meta.data, aes(x=SEURATPROJECT, fill=predicted.celltype)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=c("#D51F26","#272E6A","#208A42","#89288F","#8A9FD1","#C06CAB")) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+table(owens_SMC$predicted.celltype, owens_SMC$orig.cell)
+```
+
+# Export h5ad file for scanpy processing
+```{r}
+owens_SMC$orig.cell <- as.character(owens_SMC$orig.cell) 
+```
+
+```{r}
+SaveH5Seurat(owens_SMC, filename = "./owens_mapping/SMC_ref_mapped.h5Seurat")
+```
+
+```{r}
+Convert("./owens_mapping/SMC_ref_mapped.h5Seurat", dest = "h5ad")
+```
+
+```{r}
+saveRDS(owens_SMC, "./owens_mapping/SMC_ref_mapped.rds")
+```
+
+```{r}
+DefaultAssay(owens_SMC) <- "prediction.score.celltype"
+x <- FeaturePlot(owens_SMC, features = unique(owens_SMC$predicted.celltype),  reduction = "ref.umap", cols = c("lightgrey", "darkred"), ncol = 3) & theme(plot.title = element_text(size = 10))
+```
+
+```{r}
+breaksList = seq(0, 1, by = 1/240)
+owens_SMC@assays[["prediction.score.celltype"]]@counts <- owens_SMC@assays[["prediction.score.celltype"]]@data
+DefaultAssay(owens_SMC) <- "prediction.score.celltype"
+Idents(owens_SMC) <- "predicted.celltype"
+sample.averageexpression <- AverageExpression(owens_SMC,  features = rownames(owens_SMC@assays[["prediction.score.celltype"]]), assays = "prediction.score.celltype", group.by = "predicted.celltype")
+sample.averageexpression[[1]] <- sample.averageexpression[[1]][c("0","1","2","3","4","5","6","7"),]
+sample.averageexpression <- as.matrix(sample.averageexpression)[[1]]
+pheatmap(sample.averageexpression, scale="none", col=viridis(240), cexCol=0.5, cellwidth=20, cluster_rows=FALSE, fontsize_row=6, fontsize_col=6, cluster_cols = FALSE, legend = TRUE, border_color = NA, cellheight=20,breaks = breaksList)
+```
+
+
+# Pathway analysis across clusters
+```{r}
+library(clusterProfiler)
+library(DOSE)
+library(enrichplot)
+library(ReactomePA)
+library(ggplot2)
+```
+
+```{r}
+d <- read.csv("./v2_DE_RNA_snn_res.0.3.csv")
+d <- filter(d, avg_log2FC > 0.58)
+d <- filter(d, p_val_adj < 0.05)
+d_new <- d[c("gene", "cluster")]
+```
+
+```{r}
+eg <- bitr(as.character(d_new$gene), fromType="SYMBOL", toType="ENTREZID", OrgDb="org.Hs.eg.db")
+d_new <- filter(d_new, gene %in% eg$SYMBOL)
+d_new_enterzID <- merge(d_new, eg, by.x = "gene", by.y = "SYMBOL")
+d_new_enterzID <- d_new_enterzID[c("ENTREZID", "cluster")]
+geneList <- unstack(d_new_enterzID)
+geneList
+```
+
+```{r}
+ck <- compareCluster(geneCluster = geneList, fun = enrichGO, OrgDb="org.Hs.eg.db")
+ck <- setReadable(ck, OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+head(ck) 
+```
+
+```{r}
+dotplot(ck, font.size = 8) + theme(axis.text.x=element_text(angle=90, hjust=1))
+```
+
+# Progeny
+```{r}
+Idents(sample) <- "cell.state"
+```
+
+```{r}
+## We create a data frame with the specification of the cells that belong to 
+## each cluster to match with the Progeny scores.
+CellsClusters <- data.frame(Cell = names(Idents(sample)), 
+    CellType = as.character(Idents(sample)),
+    stringsAsFactors = FALSE)
+```
+
+```{r}
+## We compute the Progeny activity scores and add them to our Seurat object
+## as a new assay called Progeny. 
+sample <- progeny(sample, scale=FALSE, organism="Human", top=500, perm=1, 
+    return_assay = TRUE)
+
+## We can now directly apply Seurat functions in our Progeny scores. 
+## For instance, we scale the pathway activity scores. 
+sample <- Seurat::ScaleData(sample, assay = "progeny") 
+```
+
+```{r}
+## We transform Progeny scores into a data frame to better handling the results
+progeny_scores_df <- 
+    as.data.frame(t(GetAssayData(sample, slot = "scale.data", 
+        assay = "progeny"))) %>%
+    rownames_to_column("Cell") %>%
+    gather(Pathway, Activity, -Cell) 
+
+## We match Progeny scores with the cell clusters.
+progeny_scores_df <- inner_join(progeny_scores_df, CellsClusters)
+
+## We summarize the Progeny scores by cellpopulation
+summarized_progeny_scores <- progeny_scores_df %>% 
+    group_by(Pathway, CellType) %>%
+    summarise(avg = mean(Activity), std = sd(Activity))
+```
+
+```{r}
+## We prepare the data for the plot
+summarized_progeny_scores_df <- summarized_progeny_scores %>%
+    dplyr::select(-std) %>%   
+    spread(Pathway, avg) %>%
+    data.frame(row.names = 1, check.names = FALSE, stringsAsFactors = FALSE) 
+```
+
+```{r}
+paletteLength = 100
+myColor = colorRampPalette(c("Darkblue", "white","red"))(paletteLength)
+
+progenyBreaks = c(seq(min(summarized_progeny_scores_df), 0, 
+                      length.out=ceiling(paletteLength/2) + 1),
+                  seq(max(summarized_progeny_scores_df)/paletteLength, 
+                      max(summarized_progeny_scores_df), 
+                      length.out=floor(paletteLength/2)))
+
+progeny_hmap = pheatmap(t(summarized_progeny_scores_df[,-1]),fontsize=14, 
+                        fontsize_row = 10, 
+                        color=myColor, breaks = progenyBreaks, 
+                        main = "PROGENy (500)", angle_col = 45,
+                        border_color = NA, scale = "row")
+```
+
+# Palantir
+```{r}
+# Save the normalized SCT matrix
+write.csv(as.matrix(sample[["RNA"]]@scale.data), 
+          file = "./palantir/smc_fibro_RNA_normalized.txt", quote = FALSE)
+
+# Save the meta data
+write.csv(sample@meta.data, file = "./palantir/smc_fibro_meta.csv", quote = TRUE)
+```
+
+```{r}
+sample_meta <- read.csv2('./palantir/Stroma_palantir_meta_data.csv', header=TRUE, sep=',', row.names = 1)
+sample_2 <- AddMetaData(sample, sample_meta)
+
+sample_2@meta.data$pseudotime <- as.numeric(as.character(sample_2@meta.data$pseudotime))
+sample_2@meta.data$entropy <- as.numeric(as.character(sample_2@meta.data$entropy))
+```
+
+```{r}
+fdl <- read.csv2('./palantir/Stroma_fdl.csv', header=TRUE, sep=',', row.names = 1)
+fdl$x <- as.double(fdl$x)
+fdl$y <- as.double(fdl$y)
+colnames(fdl) <- paste0("FDL_", 1:2)
+sample_2[["fdl"]] <- CreateDimReducObject(embeddings = as.matrix(fdl), key = "FDL_")
+```
+
+```{r}
+DimPlot(sample_2, reduction = 'fdl', group.by = 'RNA_snn_res.0.7',label.size = 4,label=FALSE, cols = paletteDiscrete(unique(sample_2$RNA_snn_res.0.7), set = "stallion"))
+```
+
+```{r}
+FeaturePlot(sample_2, reduction = "fdl", features = c("pseudotime"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,0.75)) 
+
+FeaturePlot(sample_2, reduction = "fdl", features = c("entropy"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,0.5)) 
+```
+
+```{r}
+sample_meta
+```
+
+```{r}
+sample_meta$pseudotime <- as.numeric(sample_meta$pseudotime)
+sample_meta$entropy <- as.numeric(sample_meta$entropy)
+sample_meta$X4 <- as.numeric(sample_meta$X4)
+sample_meta$X5 <- as.numeric(sample_meta$X5)
+sample_meta$X1 <- as.numeric(sample_meta$X1)
+sample_meta$ClusterName <- as.character(sample$RNA_snn_res.0.7)
+sample_2 <- AddMetaData(sample, sample_meta)
+```
+
+```{r}
+FeaturePlot(sample_2, reduction = "fdl", features = c("X4"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,1)) 
+
+FeaturePlot(sample_2, reduction = "fdl", features = c("X5"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,1)) 
+```
+
+```{r}
+FeaturePlot(sample_2, reduction = "fdl", features = c("X1"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,1)) 
+```
+
+```{r}
+ggplot(sample_meta, aes(x=pseudotime, y=entropy, color=ClusterName)) + geom_point(size=1, alpha=0.1) + scale_color_manual(values=paletteDiscrete(unique(sample$RNA_snn_res.0.7), set = "stallion")) + theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+```
+
+```{r}
+FeaturePlot(sample_2, reduction = "rna.umap", features = c("pseudotime"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,0.75)) 
+
+FeaturePlot(sample_2, reduction = "rna.umap", features = c("entropy"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,0.5)) 
+```
+
+```{r}
+VlnPlot(sample, features = "MFGE8", cols = paletteDiscrete(unique(sample_2$RNA_snn_res.0.3), set = "stallion"), sort = TRUE, pt.size = 0) + NoLegend()
+```
+
+
+```{r}
+VlnPlot(sample_2, features = "entropy", cols = paletteDiscrete(unique(sample_2$RNA_snn_res.0.3), set = "stallion"), sort = TRUE, pt.size = 0) + NoLegend()
+```
+
+# Label Transfer ATAC Data
+```{r}
+atac_mapped_SMC <- readRDS("./atac_mapping/miller_atac_SMC_labelTransfer.rds")
+```
+
+```{r}
+DimPlot(atac_mapped_SMC, reduction = "umap.atac", group.by = "predicted.id",label.size = 4,
+        cols = paletteDiscrete(unique(sample$RNA_snn_res.0.3), set = "stallion"), label = FALSE)
+```
+
+```{r}
+atac_mapped_SMC@meta.data
+```
+
+```{r}
+df <- atac_mapped_SMC@meta.data[,c("prediction.score.5","prediction.score.0", "prediction.score.1", "prediction.score.4","prediction.score.2","prediction.score.3", "prediction.score.6","prediction.score.7","predicted.id")]
+```
+
+```{r}
+df2 <- data.frame(sort(unique(df$predicted.id)))
+```
+
+```{r}
+df2$"5" <- tapply(df$prediction.score.5, list(df$predicted.id), mean)
+df2$"0" <- tapply(df$prediction.score.0, list(df$predicted.id), mean)
+df2$"1" <- tapply(df$prediction.score.1, list(df$predicted.id), mean)
+df2$"4" <- tapply(df$prediction.score.4, list(df$predicted.id), mean)
+df2$"2" <- tapply(df$prediction.score.2, list(df$predicted.id), mean)
+df2$"3" <- tapply(df$prediction.score.3, list(df$predicted.id), mean)
+df2$"6" <- tapply(df$prediction.score.6, list(df$predicted.id), mean)
+df2$"7" <- tapply(df$prediction.score.7, list(df$predicted.id), mean)
+```
+
+```{r}
+df3 <- df2[,-1]
+rownames(df3) <- df2[,1]
+```
+
+```{r}
+df3 <- df3[,c("0","1","2","3","4","5","6","7")]
+```
+
+```{r}
+unique(atac_mapped_SMC$predicted.id)
+```
+
+```{r}
+df4 <- t(df3)[,c("0","1","2","3","4","5","6")]
+```
+
+```{r}
+library(pheatmap)
+library(viridis)
+pheatmap(df4,
+         color = viridis(250),
+         border_color = NA,
+         cellwidth  = 20, scale = "none",
+         cluster_rows = FALSE,
+         cluster_cols = FALSE,
+         cellheight  = 20)
+```
+
+```{r}
+df <- atac_mapped_SMC@meta.data[,c("prediction.score.max","predicted.id")]
+```
+
+```{r}
+df2 <- data.frame(sort(unique(df$predicted.id)))
+```
+
+```{r}
+df2$maxScore <- tapply(df$prediction.score.max, list(df$predicted.id), mean)
+```
+
+```{r}
+df3 <- df2[,-1]
+rownames(df3) <- df2[,1]
+df4 <- t(df3)[,c("0","1","2","3","4","5","6")]
+df4["7"] = 0
+```
+
+```{r}
+df5 <- t(df4)[,c("0","1","2","3","4","5","6","7")]
+```
+
+```{r}
+library(pheatmap)
+library(viridis)
+pheatmap(df5,
+         color = viridis(250),
+         border_color = NA,
+         cellwidth  = 20, scale = "none", cellheight=20,
+         cluster_rows = FALSE,
+         cluster_cols = FALSE)
+```
+
+```{r}
+FeaturePlot(atac_mapped_SMC, features = c("prediction.score.0"),  reduction = "umap.atac", cols = c("lightgrey", "darkred")) & theme(plot.title = element_text(size = 10))
+
+FeaturePlot(atac_mapped_SMC, features = c("prediction.score.3"),  reduction = "umap.atac", cols = c("lightgrey", "darkred")) & theme(plot.title = element_text(size = 10))
+
+FeaturePlot(atac_mapped_SMC, features = c("prediction.score.1"),  reduction = "umap.atac", cols = c("lightgrey", "darkred")) & theme(plot.title = element_text(size = 10))
+```
+```{r}
+# change back to working with peaks instead of gene activities
+DefaultAssay(atac_mapped_SMC) <- 'Peaks'
+Idents(atac_mapped_SMC) <- "predicted.id"
+
+de.peaks <- FindAllMarkers(atac_mapped_SMC, only.pos = TRUE, min.pct = 0.05, logfc.threshold = 0.25)
+```
+
+```{r}
+open_c3 <- rownames(de.peaks[de.peaks$avg_log2FC > 0.5, ])
+closest_genes_c3 <- ClosestFeature(atac_mapped_SMC, regions = open_c3)
+```
+
+# TF Erichment
+```{r}
+library(dorothea)
+library(tibble)
+library(pheatmap)
+library(tidyr)
+library(viper)
+```
+
+```{r}
+Idents(sample) <- "RNA_snn_res.0.3"
+```
+
+```{r}
+## We read Dorothea Regulons for Human:
+dorothea_regulon_human <- get(data("dorothea_hs", package = "dorothea"))
+
+## We obtain the regulons based on interactions with confidence level A, B and C
+regulon <- dorothea_regulon_human %>%
+    dplyr::filter(confidence %in% c("A","B","C"))
+
+## We compute Viper Scores 
+sample <- run_viper(sample, regulon,
+                  options = list(method = "scale", minsize = 4, 
+                                 eset.filter = FALSE, cores = 1, 
+                                 verbose = FALSE))
+
+DefaultAssay(object = sample) <- "dorothea"
+sample <- ScaleData(sample)
+```
+
+```{r}
+Idents(sample) <- "RNA_snn_res.0.3"
+
+## We transform Viper scores, scaled by seurat, into a data frame to better 
+## handling the results
+viper_scores_df <- GetAssayData(sample, slot = "scale.data", 
+                                    assay = "dorothea") %>%
+  data.frame(check.names = F) %>%
+  t()
+
+## We create a data frame containing the cells and their clusters
+CellsClusters <- data.frame(cell = names(Idents(sample)), 
+                            cell_type = as.character(Idents(sample)),
+                            check.names = F)
+
+## We create a data frame with the Viper score per cell and its clusters
+viper_scores_clusters <- viper_scores_df  %>%
+  data.frame() %>% 
+  rownames_to_column("cell") %>%
+  gather(tf, activity, -cell) %>%
+  inner_join(CellsClusters)
+
+## We summarize the Viper scores by cellpopulation
+summarized_viper_scores <- viper_scores_clusters %>% 
+  group_by(tf, cell_type) %>%
+  summarise(avg = mean(activity),
+            std = sd(activity))
+
+## We select the most variable TFs
+highly_variable_tfs <- summarized_viper_scores %>%
+  group_by(tf) %>%
+  mutate(var = var(avg))  %>%
+  ungroup() %>%
+  top_n(1000, var) %>%
+  distinct(tf)
+
+## We prepare the data for the plot
+summarized_viper_scores_df <- summarized_viper_scores %>%
+  semi_join(highly_variable_tfs, by = "tf") %>%
+  dplyr::select(-std) %>%   
+  spread(tf, avg) %>%
+  data.frame(row.names = 1, check.names = FALSE) 
+```
+
+
+
+
+
+
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("ACTA2","CNN1","MYL9","TPM2","MYH11","TAGLN","SOST","PPP1R14A","COL18A1","ITIH4")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$SMC<-z_scores[1,]
+FeaturePlot(object=sample, features = "SMC",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+
+```{r}
+plot_density(sample, features = "RUNX1",reduction = 'rna.umap')
+```
+
+#Chondrocytes
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("OMD","LUM","HAPLN1","COMP","FMOD","FAP","ITGA10","COL8A1","RUNX1","LTBP2","ENPP1")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$chondro<-z_scores[1,]
+FeaturePlot(object=sample, features = "chondro",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+
+```{r}
+DefaultAssay(sample) <- "SCT"
+FeaturePlot(sample, reduction = "rna.umap", features = c("FAP"))+ scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,1)) 
+```
+
+```{r}
+DefaultAssay(cor) <- "ADT"
+FeaturePlot(cor, reduction = "rna.umap", features = c("FAP.1"))+ scale_color_gradientn(colors=paletteContinuous("blueYellow"), oob=scales::squish, limits=c(0,2)) 
+```
+
+
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("MMP12","IL1B","PTGS2","EREG","CCL5","IL1A","CXCL3","CXCL8","EDNRB","STC1","HMOX1","AKR1C2","MMP1","DUSP6","NAMPT","CXCL2","AKR1C1","SERPINB2","FADS1","THBD","ADAMTS4","PLIN2","MT2A","LIF","AKR1B1")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$IPCOX<-z_scores[1,]
+FeaturePlot(object=sample, features = "IPCOX",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,0.5))
+```
+
+```{r}
+cor <- readRDS("smc_fib_annotated.rds")
+```
+
+```{r}
+library("scProportionTest")
+prop_test <- sc_utils(cor)
+```
+
+```{r}
+prop_test <- permutation_test(
+	prop_test, cluster_identity = "cell.state",
+	sample_1 = "F", sample_2 = "M",
+	sample_identity = "Sex",
+)
+```
+
+```{r}
+permutation_plot(prop_test)
+```
+
+```{r}
+Idents(sample) <- "cell.state"
+SMC_lineage <- subset(sample, idents = c("SMC1","SMC2","SMC3","SMC4","FMC","CMC"))
+```
+
+```{r}
+DotPlot(sample, features = c("TNFRSF11B","FAP"), group.by = "cell.state") + RotatedAxis()
+```
+
+```{r}
+intersect(g2$Symbol, g5$Symbol)
+```
+```{r}
+DefaultAssay(cor) <- "RNA"
+VlnPlot(cor, features = "IGFBP7", group.by = "cell.state", pt.size=0)
+```
+
+
+############
+```{r}
+g1 <- read.csv2("./Fw_ Bulk RNA-seq project_ SMC in foam cell media/DEG_FoamCell1d_vs_BM1d.csv", sep = ",")
+g2 <- read.csv2("./Fw_ Bulk RNA-seq project_ SMC in foam cell media/DEG_FoamCell8d_vs_BM8d.csv", sep = ",")
+g3 <- read.csv2("./Fw_ Bulk RNA-seq project_ SMC in foam cell media/DEG_FoamCell8d_vs_FoamCell1d.csv", sep = ",")
+g4 <- read.csv2("./Fw_ Bulk RNA-seq project_ SMC in foam cell media/DEG_oxLDL1d_vs_BM1d.csv", sep = ",")
+g5 <- read.csv2("./Fw_ Bulk RNA-seq project_ SMC in foam cell media/DEG_oxLDL8d_vs_BM8d.csv", sep = ",")
+g6 <- read.csv2("./Fw_ Bulk RNA-seq project_ SMC in foam cell media/DEG_oxLDL8d_vs_oxLDL1d.csv", sep = ",")
+```
+
+```{r}
+DefaultAssay(sample) <- "RNA"
+sample <- AddModuleScore(
+	  object = sample,
+	  features = list(g1$Symbol),
+	  name = 'FoamCell1d_vs_BM1d'
+)
+
+sample <- AddModuleScore(
+	  object = sample,
+	  features = list(g2$Symbol),
+	  name = 'FoamCell8d_vs_BM8d'
+)
+
+sample <- AddModuleScore(
+	  object = sample,
+	  features = list(g3$Symbol),
+	  name = 'FoamCell8d_vs_FoamCell1d'
+)
+
+sample <- AddModuleScore(
+	  object = sample,
+	  features = list(g4$Symbol),
+	  name = 'oxLDL1d_vs_BM1d'
+)
+
+sample <- AddModuleScore(
+	  object = sample,
+	  features = list(g5$Symbol),
+	  name = 'oxLDL8d_vs_BM8d'
+)
+
+sample <- AddModuleScore(
+	  object = sample,
+	  features = list(g6$Symbol),
+	  name = 'oxLDL8d_vs_oxLDL1d'
+)
+```
+```{r}
+Idents(sample) <- "cell.state"
+sample2 <- subset(sample, idents = c("Pericyte","SMC1","SMC2","SMC3","SMC4","CMC","FMC"))
+```
+
+```{r}
+DotPlot(sample2, features = c("FoamCell1d_vs_BM1d1","FoamCell8d_vs_BM8d1","FoamCell8d_vs_FoamCell1d1",
+                             "oxLDL1d_vs_BM1d1","oxLDL8d_vs_BM8d1","oxLDL8d_vs_oxLDL1d1"), group.by = "cell.state") + RotatedAxis()
+```
+
+```{r}
+sample2 <- AddModuleScore(
+	  object = sample2,
+	  features = list(intersect(g2$Symbol, g5$Symbol)),
+	  name = 'oxLDL8d_AND_FoamCell8d'
+)
+```
+
+```{r}
+DotPlot(sample2, features = c("RUNX1"), group.by = "cell.state") + RotatedAxis()
+```
+
+```{r}
+DefaultAssay(sample) <- "SCT"
+DotPlot(sample, features = c("RUNX2","MFGE8","TP53","RB1","CDKN1A","CDKN2A")) + RotatedAxis()
+```
+
+# Subset VSCM compartment
+```{r}
+sample_meta <- read.csv2('./palantir/Stroma_palantir_meta_data.csv', header=TRUE, sep=',', row.names = 1)
+```
+
+```{r}
+sample2 <- AddMetaData(sample, sample_meta)
+sample2@meta.data$pseudotime <- as.numeric(as.character(sample2@meta.data$pseudotime))
+sample2@meta.data$entropy <- as.numeric(as.character(sample2@meta.data$entropy))
+```
+
+```{r}
+Idents(sample2) <- "cell.state"
+sample2 <- subset(sample2, idents =c("Pericyte","SMC1","SMC2","SMC3","SMC4","FMC","CMC"))
+```
+
+```{r}
+sample2 <- RunUMAP(sample2, reduction = "harmony_rna", dims = 1:50,
+                  reduction.name = 'rna.umap2', reduction.key = 'rnaUMAP_', assay = "RNA")
+```
+
+```{r}
+DimPlot(sample2, reduction = 'rna.umap', group.by = 'cell.state',label.size = 4,label=FALSE, cols = paletteDiscrete(unique(sample2$cell.state), set = "stallion"))
+```
+
+```{r}
+FeaturePlot(sample2, reduction = "rna.umap", features = c("pseudotime"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,0.5)) 
+
+FeaturePlot(sample2, reduction = "rna.umap", features = c("entropy"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,0.5)) 
+```
+
+```{r}
+DefaultAssay(sample2) <- "SCT"
+FeaturePlot(sample2, reduction = "rna.umap", features = c("FAP"))+ scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,1)) 
+```
+
+```{r}
+DefaultAssay(sample2) <- "SCT"
+FeaturePlot(sample2, reduction = "rna.umap", features = c("MYH11"))+ scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,3)) 
+```
+
+```{r}
+# Efficient function to find genes correlating with FAP expression
+find_fap_correlations <- function(seurat_obj, genes, min_correlation = 0.3, p_value_cutoff = 0.05) {
+  # Extract expression matrix
+  expr_matrix <- GetAssayData(seurat_obj[["RNA"]], slot = "data")
+  adt_matrix <- GetAssayData(seurat_obj[["ADT"]], slot = "data")
+  
+  # Get FAP expression vector
+  fap_expr <- adt_matrix["FAP.1",]
+  
+  # Remove FAP from the matrix to avoid self-correlation
+  #expr_matrix <- expr_matrix[rownames(expr_matrix) %in% genes,]
+  expr_matrix <- expr_matrix[rownames(expr_matrix) != "FAP",]
+  
+  # Calculate correlations all at once using cor() function
+  cors <- cor(t(as.matrix(expr_matrix)), 
+             as.matrix(fap_expr), 
+             method = "spearman")
+  
+  # Calculate p-values using vectorized operations
+  n <- ncol(expr_matrix)
+  t_stat <- cors * sqrt((n-2)/(1-cors^2))
+  p_values <- 2 * pt(-abs(t_stat), df = n-2)
+  
+  # Create results dataframe
+  results <- data.frame(
+    gene = rownames(expr_matrix),
+    correlation = cors,
+    p_value = p_values,
+    row.names = NULL
+  )
+  
+  # Add adjusted p-values
+  results$p_adj <- p.adjust(results$p_value, method = "BH")
+  
+  # Filter results
+  significant_correlations <- results[
+    abs(results$correlation) >= min_correlation & 
+    results$p_adj <= p_value_cutoff,
+  ]
+  
+  # Sort by absolute correlation
+  significant_correlations <- significant_correlations[
+    order(abs(significant_correlations$correlation), decreasing = TRUE),
+  ]
+  
+  return(significant_correlations)
+}
+```
+
+```{r}
+# Optional: Function to visualize results
+plot_fap_correlations <- function(correlation_results, top_n = 30) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("Please install ggplot2 to use this plotting function")
+  }
+  
+  # Get top correlations
+  plot_data <- head(correlation_results, top_n)
+  
+  # Create plot
+  ggplot2::ggplot(plot_data, 
+         ggplot2::aes(x = reorder(gene, correlation), y = correlation)) +
+    ggplot2::geom_bar(stat = "identity", 
+             fill = ifelse(plot_data$correlation > 0, "#4C78A8", "#E45756")) +
+    ggplot2::theme_minimal() +
+    ggplot2::coord_flip() +
+    ggplot2::labs(x = "Gene", 
+         y = "Correlation with FAP Protein", 
+         title = paste("Top", top_n, "genes correlating with FAP expression")) +
+    ggplot2::theme(
+      axis.text.y = ggplot2::element_text(size = 8),
+      plot.title = ggplot2::element_text(size = 11)
+    )
+}
+```
+
+```{r}
+Idents(sample) <- "cell.state"
+VSMC <- subset(sample, idents = c("Pericyte","SMC1","SMC2","SMC3","SMC4","FMC","CMC"))
+```
+
+```{r}
+# # Find correlations
+fap_correlations <- find_fap_correlations(VSMC)
+```
+
+```{r}
+head(fap_correlations)
+```
+
+```{r}
+fap_correlations
+```
+
+
+```{r}
+# # Get positive and negative correlations separately
+pos_cors <- fap_correlations[fap_correlations$correlation > 0,]
+neg_cors <- fap_correlations[fap_correlations$correlation < 0,]
+```
+
+```{r}
+pos_cors
+```
+
+```{r}
+plot_fap_correlations(fap_correlations)
+```
+```{r}
+write.csv(fap_correlations, file ="./FAP_protein_correlations_protein.csv", quote = FALSE)
+```
+
+
+```{r}
+DefaultAssay(sample) <- "ADT"
+FeaturePlot(sample, reduction = "rna.umap", features = c("F3.1"))+ scale_color_gradientn(colors=paletteContinuous("blueYellow"), oob=scales::squish, limits=c(0,4)) 
+```
+
+```{r}
+sample <- readRDS("smc_fib_annotated.rds")
+```
+
+```{r}
+d <- read.csv("./DE_RNA_cell.state.csv")
+d <- filter(d, avg_log2FC > 0.58)
+d <- filter(d, p_val_adj < 0.05)
+```
+
+```{r}
+d %>%
+    group_by(cluster) %>%
+    top_n(n = 5, wt = avg_log2FC) -> top10
+```
+
+```{r}
+top10
+```
+
+
+# Create heatmaps for GEX
+```{r}
+DefaultAssay(sample) <- "SCT"
+pdf("./marker_dotplot.pdf", useDingbats = FALSE, width=16, height=4)
+DotPlot(sample, features = unique(top10$gene), group.by = "cell.state", col.min=0, cols = c("lightgrey", "red")) + RotatedAxis()
+dev.off()
+```
+
+```{r}
+fap_correlations <- read.csv2("./FAP_protein_correlations_protein.csv", sep = ",")
+fap_correlations$correlation <- as.double(fap_correlations$correlation)
+fap_correlations
+```
+
+```{r}
+pdf("./FAP_protein_protein_corr.pdf", useDingbats = FALSE, width=2, height=2)
+plot_fap_correlations(fap_correlations)
+dev.off()
+```
+
+
+```{r}
+DefaultAssay(sample) <- "SCT"
+FeaturePlot(sample, reduction = "rna.umap", features = c("LUM"))+ scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,3)) 
+```
+
+```{r}
+sample <- readRDS("./smc_fib_annotated.rds")
+```
+
+```{r}
+Idents(sample) <- "cell.state"
+sample <- subset(sample, idents =c("Pericyte","SMC1","SMC2","SMC3","SMC4","FMC","CMC"))
+```
+
+```{r}
+DefaultAssay(sample) <- "SCT"
+DotPlot(sample, features = c("LOXL1", "PALLD", "MYO9B", "NAV1", "SBF2", "FURIN","AMOTL2")) + RotatedAxis()
+```
+
+```{r}
+Idents(sample) <- "cell.state"
+sample <- subset(sample, idents =c("Pericyte","SMC1","SMC2","SMC3","SMC4","FMC","CMC"))
+```
+
+```{r}
+pdf("./THY1_Protein.pdf", useDingbats = FALSE, width=3.5, height=4)
+DefaultAssay(sample) <- "ADT"
+DotPlot(sample, features = c("THY1.1")) + RotatedAxis()
+dev.off()
+```
+
+```{r}
+DefaultAssay(sample) <- "SCT"
+DotPlot(sample, features = c("CD68", "SPP1", "LGALS3", "PLIN2", "MSR1", "CD36", "OLR1", "TREM2", "APOE", "LAPTM5", "CD74", "GRN", "FABP5", "AIF1", "LAMP2", "ABCA1")) + RotatedAxis()
+```
+
+```{r}
+FeaturePlot(sample, features = "NRPC3")
+```
+
+```{r}
+sample <- readRDS("smc_fib_annotated.rds")
+```
+
+```{r}
+pdf("./THY1_RNA.pdf", useDingbats = FALSE, width=3.5, height=4)
+DefaultAssay(sample) <- "SCT"
+DotPlot(sample, features = c("THY1"), group.by = "cell.state") + RotatedAxis()
+dev.off()
+```
+
+```{r}
+pdf("./THY1_protein.pdf", useDingbats = FALSE, width=3.5, height=4)
+DefaultAssay(sample) <- "ADT"
+DotPlot(sample, features = c("THY1.1"), group.by = "cell.state") + RotatedAxis()
+dev.off()
+```
+
+
+###########
+```{r}
+fun <- function(x) {
+  if (x == "Pericyte") {"Pericyte"} 
+  else if (x == "SMC1") {"QSMC"}
+  else if (x == "SMC2") {"QSMC"}
+  else if (x == "SMC3") {"QSMC"}
+  else if (x == "SMC4") {"QSMC"}
+  else if (x == "FMC") {"modSMC"}
+  else if (x == "CMC") {"modSMC"}
+  else if (x == "Fib1") {"Fib"}
+  else if (x == "Fib2") {"Fib"}
+  else if (x == "Fib3") {"Fib"}
+  else if (x == "Fib4") {"Fib"}
+  else if (x == "Fib5") {"Fib"}
+  else if (x == "Fib6") {"Fib"}
+  else if (x == "Fib7") {"Fib"}
+}
+sample$cell.state2 <- mapply(fun, sample$cell.state)
+```
+
+```{r}
+Idents(sample) <- "cell.state2"
+SMCs <- subset(sample, idents = c("QSMC","modSMC"))
+```
+
+```{r}
+DefaultAssay(SMCs) <- 'RNA'
+Idents(SMCs) <- "cell.state2"
+rna.rnamarkers <- FindAllMarkers(SMCs, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0)
+write.csv(rna.rnamarkers, file ="./DE_RNA_Protein/DE_RNA_cell.state.csv", quote = FALSE)
+```
+
+```{r}
+DefaultAssay(SMCs) <- 'ADT'
+Idents(SMCs) <- "cell.state2"
+prot.rnamarkers <- FindAllMarkers(SMCs, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0)
+write.csv(prot.rnamarkers, file ="./DE_RNA_Protein/DE_ADT_cell.state.csv", quote = FALSE)
+```
+
+```{r}
+de <- prot.rnamarkers
+de$avg_log2FC <- ifelse(de$cluster == "QSMC", -de$avg_log2FC, de$avg_log2FC)
+
+# add a column of NAs
+de$diffexpressed <- "NO"
+# if log2Foldchange > 0.6 and pvalue < 0.05, set as "UP" 
+de$diffexpressed[de$avg_log2FC > 0.58 & de$p_val_adj < 0.05] <- "UP"
+# if log2Foldchange < -0.6 and pvalue < 0.05, set as "DOWN"
+de$diffexpressed[de$avg_log2FC < -0.58 & de$p_val_adj < 0.05] <- "DOWN"
+
+de$delabel <- NA
+de$delabel[de$diffexpressed != "NO"] <- de$gene[de$diffexpressed != "NO"]
+```
+
+```{r}
+library(ggrepel)
+pdf("./volcano_protein.pdf", useDingbats = FALSE, width=5, height=4)
+# plot adding up all layers we have seen so far
+ggplot(data=de, aes(x=avg_log2FC, y=-log10(p_val_adj), col=diffexpressed)) +
+        geom_point() + 
+        theme_minimal() +
+        scale_color_manual(values=c("black", "grey", "black")) 
+dev.off()
+```
+
+```{r}
+protein$gene <- sub("\\.1$", "", protein$gene)
+```
+
+# QSMC
+```{r}
+rna.rnamarkers <- subset.data.frame(rna.rnamarkers, rna.rnamarkers$p_val_adj < 0.05)
+rna.rnamarkers <- subset.data.frame(rna.rnamarkers, rna.rnamarkers$avg_log2FC > 0.25)
+rna.rnamarkers.QSMC <- subset.data.frame(rna.rnamarkers, rna.rnamarkers$cluster == "QSMC")
+```
+
+```{r}
+prot.rnamarkers <- subset.data.frame(prot.rnamarkers, prot.rnamarkers$p_val_adj < 0.05)
+prot.rnamarkers <- subset.data.frame(prot.rnamarkers, prot.rnamarkers$avg_log2FC > 0.25)
+prot.rnamarkers.QSMC <- subset.data.frame(prot.rnamarkers, prot.rnamarkers$cluster == "QSMC")
+```
+
+```{r}
+intersect(rna.rnamarkers.QSMC$gene, prot.rnamarkers.QSMC$gene)
+```
+
+# modSMC
+```{r}
+rna.rnamarkers <- subset.data.frame(rna.rnamarkers, rna.rnamarkers$p_val_adj < 0.05)
+rna.rnamarkers <- subset.data.frame(rna.rnamarkers, rna.rnamarkers$avg_log2FC > 0.25)
+rna.rnamarkers.modSMC <- subset.data.frame(rna.rnamarkers, rna.rnamarkers$cluster == "modSMC")
+```
+
+```{r}
+prot.rnamarkers <- subset.data.frame(prot.rnamarkers, prot.rnamarkers$p_val_adj < 0.05)
+prot.rnamarkers <- subset.data.frame(prot.rnamarkers, prot.rnamarkers$avg_log2FC > 0.25)
+prot.rnamarkers.modSMC <- subset.data.frame(prot.rnamarkers, prot.rnamarkers$cluster == "modSMC")
+```
+
+```{r}
+intersect(rna.rnamarkers.modSMC$gene, prot.rnamarkers.modSMC$gene)
+```
+
+```{r}
+rna <- read.csv("./DE_RNA_Protein/DE_RNA_cell.state.csv")
+rna <- subset.data.frame(rna, rna$p_val_adj < 0.05)
+rna.rnamarkers.modSMC <- subset.data.frame(rna, rna$cluster == "modSMC")
+
+protein <- read.csv("./DE_RNA_Protein/DE_ADT_cell.state.csv")
+protein$gene <- sub("\\.1$", "", protein$gene)
+protein <- subset.data.frame(protein, protein$p_val_adj < 0.05)
+prot.rnamarkers.modSMC <- subset.data.frame(protein, protein$cluster == "modSMC")
+```
+
+```{r}
+rna.rnamarkers.modSMC <- rna.rnamarkers.modSMC[,c("gene","avg_log2FC")]
+prot.rnamarkers.modSMC <- prot.rnamarkers.modSMC[,c("gene","avg_log2FC")]
+```
+
+```{r}
+# Join by gene, renaming log2FC columns for clarity
+result <- rna.rnamarkers.modSMC %>%
+  inner_join(prot.rnamarkers.modSMC, by = "gene", suffix = c(".df1", ".df2"))
+```
+
+```{r}
+write.csv(result, file ="./DE_RNA_Protein/merged.csv", quote = FALSE)
+```
+

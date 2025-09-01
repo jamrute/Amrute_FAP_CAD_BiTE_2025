@@ -1,0 +1,339 @@
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(sctransform)
+library(ggplot2)
+library(harmony)
+library(ArchR)
+library(ggsci)
+options(future.globals.maxSize = 90000 * 1024^2) # for 50 Gb RAM
+```
+
+```{r}
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_1__20240621__170414"
+s1 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0005092__Region_1__20240621__170414_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s1[["Morphology"]] <- custom_assay
+s1 <- subset(s1, subset = nCount_Xenium > 0)
+s1$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_3__20240621__170414"
+s2 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0005092__Region_3__20240621__170414_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s2[["Morphology"]] <- custom_assay
+s2 <- subset(s2, subset = nCount_Xenium > 0)
+s2$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_5__20240621__170414"
+s3 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0005092__Region_5__20240621__170414_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s3[["Morphology"]] <- custom_assay
+s3 <- subset(s3, subset = nCount_Xenium > 0)
+s3$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_6__20240621__170414"
+s4 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0005092__Region_6__20240621__170414_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s4[["Morphology"]] <- custom_assay
+s4 <- subset(s4, subset = nCount_Xenium > 0)
+s4$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0010699__Region_1__20240621__170414"
+s5 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0010699__Region_1__20240621__170414_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s5[["Morphology"]] <- custom_assay
+s5 <- subset(s5, subset = nCount_Xenium > 0)
+s5$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0010699__Region_2__20240621__170414"
+s6 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0010699__Region_2__20240621__170414_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s6[["Morphology"]] <- custom_assay
+s6 <- subset(s6, subset = nCount_Xenium > 0)
+s6$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0010699__Region_3__20240621__170414"
+s7 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0010699__Region_3__20240621__170414_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s7[["Morphology"]] <- custom_assay
+s7 <- subset(s7, subset = nCount_Xenium > 0)
+s7$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0005113__Region_1__20240628__212431"
+s8 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0005113__Region_1__20240628__212431_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s8[["Morphology"]] <- custom_assay
+s8 <- subset(s8, subset = nCount_Xenium > 0)
+s8$disease <- "Severe"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0005113__Region_2__20240628__212431"
+s9 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0005113__Region_2__20240628__212431_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s9[["Morphology"]] <- custom_assay
+s9 <- subset(s9, subset = nCount_Xenium > 0)
+s9$disease <- "Severe"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0005113__Region_3__20240628__212431"
+s10 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0005113__Region_3__20240628__212431_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s10[["Morphology"]] <- custom_assay
+s10 <- subset(s10, subset = nCount_Xenium > 0)
+s10$disease <- "Severe"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0010641__Region_1__20240628__212431"
+s11 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0010641__Region_1__20240628__212431_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s11[["Morphology"]] <- custom_assay
+s11 <- subset(s11, subset = nCount_Xenium > 0)
+s11$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0010641__Region_3__20240628__212431"
+s12 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0010641__Region_3__20240628__212431_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s12[["Morphology"]] <- custom_assay
+s12 <- subset(s12, subset = nCount_Xenium > 0)
+s12$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0010641__Region_5__20240628__212431"
+s13 <- LoadXenium(path, fov = "fov")
+morp <- read.csv("_output-XETG00113__0010641__Region_5__20240628__212431_cell_morphology_metrics.csv", row.names = 1)
+morp <- t(morp)
+custom_assay <- CreateAssayObject(counts = morp)
+s13[["Morphology"]] <- custom_assay
+s13 <- subset(s13, subset = nCount_Xenium > 0)
+s13$disease <- "Mild"
+```
+
+```{r}
+xenium.obj.m <- merge(s1, y=c(s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s13))
+```
+
+```{r}
+xenium.obj.m <- subset(xenium.obj.m, subset = nCount_Xenium > 10)
+```
+
+```{r}
+xenium.obj.m
+```
+```{r}
+xenium.obj <- readRDS("../analysis_amrute/xenium.obj.integrated.rds")
+```
+
+```{r}
+xenium.obj[["Morphology"]] <- xenium.obj.m[["Morphology"]]
+```
+
+```{r}
+saveRDS(xenium.obj, "xenium.obj.integrated.morphology.rds")
+```
+
+```{r}
+DefaultAssay(xenium.obj) <- "Morphology"
+xenium.obj <- ScaleData(xenium.obj, features = rownames(xenium.obj[["Morphology"]]))
+```
+
+```{r}
+xenium.obj <- RunPCA(xenium.obj, assay = "Morphology", features = rownames(xenium.obj[["Morphology"]]),
+                     reduction.name = "pca_morphology")
+xenium.obj <- RunUMAP(xenium.obj, reduction = "pca_morphology", dims = 1:10, assay = "Morphology")
+```
+
+```{r}
+DimPlot(xenium.obj, group.by = "predicted.id", reduction = "umap")
+```
+
+
+```{r}
+xenium.Myeloid <- readRDS("../analysis_amrute/xenium.Myeloid.rds")
+xenium.stroma <- readRDS("../analysis_amrute/xenium.stroma.rds")
+```
+
+##################### Storma
+
+# Subset stroma for cell state mapping
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+stroma <- subset(xenium.obj, idents = c("Fibroblast2","Fibroblast1","SMCPericyte","ModSMC"))
+```
+
+```{r}
+stroma$cell.state <- xenium.stroma$predicted.celltype
+```
+
+```{r}
+Idents(stroma) <- "cell.state"
+morph_markers <- FindAllMarkers(
+  stroma,
+  assay = "Morphology",
+  slot = "scale.data",  # Use scaled values
+  group.by = "cell.state",
+  only.pos = FALSE
+) 
+```
+
+
+```{r}
+morph_markers <- subset.data.frame(morph_markers, morph_markers$p_val_adj < 0.05)
+```
+
+```{r}
+pdf("./stroma_cell_states_morphology_metrics.pdf", useDingbats = FALSE, width=3.5, height=2.5)
+library(pheatmap)
+DefaultAssay(stroma) <- "Morphology"
+sample.averageexpression <- AverageExpression(stroma, features = rownames(stroma), assays = "Morphology", group.by = c("cell.state"), slot = "counts")
+pheatmap(sample.averageexpression[[1]], scale="row", col=paletteContinuous("solarExtra"), cluster_rows=TRUE, fontsize_row=6, fontsize_col=6, cluster_cols = FALSE, legend = TRUE, border_color=NA)
+dev.off()
+```
+
+```{r}
+# Get the matrix used for the heatmap
+expr_matrix <- sample.averageexpression[[1]]
+
+morph_markers$gene <- sub("\\.\\d+$", "", morph_markers$gene)
+rownames(expr_matrix) <- sub("\\.\\d+$", "", rownames(expr_matrix))
+
+# Filter significant markers (adj p-val < 0.05)
+sig_markers <- morph_markers[morph_markers$p_val_adj < 0.05, ]
+
+# Create a blank annotation matrix with same dimensions
+annotation_matrix <- matrix("", nrow = nrow(expr_matrix), ncol = ncol(expr_matrix),
+                            dimnames = list(rownames(expr_matrix), colnames(expr_matrix)))
+
+# Fill in asterisks for significant feature–group combinations
+for (i in 1:nrow(sig_markers)) {
+  gene <- sig_markers$gene[i]
+  cluster <- as.character(sig_markers$cluster[i])
+  if (gene %in% rownames(annotation_matrix) && cluster %in% colnames(annotation_matrix)) {
+    annotation_matrix[gene, cluster] <- "*"
+  }
+}
+```
+
+
+```{r}
+library(pheatmap)
+library(ggplot2)  # if not already loaded
+
+pdf("./stroma_cell_states_morphology_metrics.pdf", useDingbats = FALSE, width=3.5, height=2.5)
+
+pheatmap(expr_matrix,
+         scale = "row",
+         col = paletteContinuous("solarExtra"),
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,
+         fontsize_row = 6,
+         fontsize_col = 6,
+         border_color = NA,
+         legend = TRUE,
+         display_numbers = annotation_matrix,
+         number_color = "black")  # you can change this color
+
+dev.off()
+```
+
+
+
+##################### Myeloid
+
+# Subset myeloid for cell state mapping
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+myeloid <- subset(xenium.obj, idents = c("Myeloid"))
+```
+
+```{r}
+myeloid$cell.state <- xenium.Myeloid$predicted.celltype
+```
+
+```{r}
+Idents(myeloid) <- "cell.state"
+morph_markers.myeloid <- FindAllMarkers(
+  myeloid,
+  assay = "Morphology",
+  slot = "scale.data",  # Use scaled values
+  group.by = "cell.state",
+  only.pos = FALSE
+) 
+```
+
+```{r}
+myeloid <- RunPCA(myeloid, assay = "Morphology", features = rownames(myeloid[["Morphology"]]),
+                     reduction.name = "pca_morphology")
+myeloid <- RunUMAP(myeloid, reduction = "pca_morphology", dims = 1:10, assay = "Morphology")
+```
+
+```{r}
+morph_markers.myeloid <- subset.data.frame(morph_markers.myeloid, morph_markers.myeloid$p_val_adj < 0.05)
+```
+
+```{r}
+# Get the matrix used for the heatmap
+expr_matrix <- sample.averageexpression[[1]]
+
+morph_markers.myeloid$gene <- sub("\\.\\d+$", "", morph_markers.myeloid$gene)
+rownames(expr_matrix) <- sub("\\.\\d+$", "", rownames(expr_matrix))
+
+# Filter significant markers (adj p-val < 0.05)
+sig_markers <- morph_markers.myeloid[morph_markers.myeloid$p_val_adj < 0.05, ]
+
+# Create a blank annotation matrix with same dimensions
+annotation_matrix <- matrix("", nrow = nrow(expr_matrix), ncol = ncol(expr_matrix),
+                            dimnames = list(rownames(expr_matrix), colnames(expr_matrix)))
+
+# Fill in asterisks for significant feature–group combinations
+for (i in 1:nrow(sig_markers)) {
+  gene <- sig_markers$gene[i]
+  cluster <- as.character(sig_markers$cluster[i])
+  if (gene %in% rownames(annotation_matrix) && cluster %in% colnames(annotation_matrix)) {
+    annotation_matrix[gene, cluster] <- "*"
+  }
+}
+```
+
+
+```{r}
+library(pheatmap)
+library(ggplot2)  # if not already loaded
+
+pdf("./myeloid_cell_states_morphology_metrics.pdf", useDingbats = FALSE, width=3.5, height=2.5)
+
+pheatmap(expr_matrix,
+         scale = "row",
+         col = paletteContinuous("solarExtra"),
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,
+         fontsize_row = 6,
+         fontsize_col = 6,
+         border_color = NA,
+         legend = TRUE,
+         display_numbers = annotation_matrix,
+         number_color = "black")  # you can change this color
+
+dev.off()
+```
+

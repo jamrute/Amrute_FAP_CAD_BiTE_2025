@@ -1,0 +1,340 @@
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(SeuratDisk)
+```
+
+###### Preprocessing Steps
+
+# Load the dataset and create a Seurat Object
+```{r}
+sample10_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/analysis_main/Sequencing/CellRangerOutput/sample10/'
+sample10.data <- Read10X(data.dir =sample10_dir)
+sample10 <- CreateSeuratObject(counts = sample10.data[["Gene Expression"]])
+sample10[["ADT"]] <- CreateAssayObject(counts = sample10.data[["Antibody Capture"]])
+sample10$sampleID <- "sample10"
+```
+
+```{r}
+sample11_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample11/'
+sample11.data <- Read10X(data.dir =sample11_dir)
+sample11 <- CreateSeuratObject(counts = sample11.data[["Gene Expression"]])
+sample11[["ADT"]] <- CreateAssayObject(counts = sample11.data[["Antibody Capture"]])
+sample11$sampleID <- "sample11"
+```
+
+```{r}
+sample14_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample14/'
+sample14.data <- Read10X(data.dir =sample14_dir)
+sample14 <- CreateSeuratObject(counts = sample14.data[["Gene Expression"]])
+sample14[["ADT"]] <- CreateAssayObject(counts = sample14.data[["Antibody Capture"]])
+sample14$sampleID <- "sample14"
+```
+
+```{r}
+sample16_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample16/'
+sample16.data <- Read10X(data.dir =sample16_dir)
+sample16 <- CreateSeuratObject(counts = sample16.data[["Gene Expression"]])
+sample16[["ADT"]] <- CreateAssayObject(counts = sample16.data[["Antibody Capture"]])
+sample16$sampleID <- "sample16"
+```
+
+```{r}
+sample18_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample18/'
+sample18.data <- Read10X(data.dir =sample18_dir)
+sample18 <- CreateSeuratObject(counts = sample18.data[["Gene Expression"]])
+sample18[["ADT"]] <- CreateAssayObject(counts = sample18.data[["Antibody Capture"]])
+sample18$sampleID <- "sample18"
+```
+
+```{r}
+sample19_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample19/'
+sample19.data <- Read10X(data.dir =sample19_dir)
+sample19 <- CreateSeuratObject(counts = sample19.data[["Gene Expression"]])
+sample19[["ADT"]] <- CreateAssayObject(counts = sample19.data[["Antibody Capture"]])
+sample19$sampleID <- "sample19"
+```
+
+```{r}
+sample20_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample20/'
+sample20.data <- Read10X(data.dir =sample20_dir)
+sample20 <- CreateSeuratObject(counts = sample20.data[["Gene Expression"]])
+sample20[["ADT"]] <- CreateAssayObject(counts = sample20.data[["Antibody Capture"]])
+sample20$sampleID <- "sample20"
+```
+
+```{r}
+sample21_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample21/'
+sample21.data <- Read10X(data.dir =sample21_dir)
+sample21 <- CreateSeuratObject(counts = sample21.data[["Gene Expression"]])
+sample21[["ADT"]] <- CreateAssayObject(counts = sample21.data[["Antibody Capture"]])
+sample21$sampleID <- "sample21"
+```
+
+```{r}
+sample22_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample22/'
+sample22.data <- Read10X(data.dir =sample22_dir)
+sample22 <- CreateSeuratObject(counts = sample22.data[["Gene Expression"]])
+sample22[["ADT"]] <- CreateAssayObject(counts = sample22.data[["Antibody Capture"]])
+sample22$sampleID <- "sample22"
+```
+
+```{r}
+sample23_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample23/'
+sample23.data <- Read10X(data.dir =sample23_dir)
+sample23 <- CreateSeuratObject(counts = sample23.data[["Gene Expression"]])
+sample23[["ADT"]] <- CreateAssayObject(counts = sample23.data[["Antibody Capture"]])
+sample23$sampleID <- "sample23"
+```
+
+```{r}
+sample24_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample24/'
+sample24.data <- Read10X(data.dir =sample24_dir)
+sample24 <- CreateSeuratObject(counts = sample24.data[["Gene Expression"]])
+sample24[["ADT"]] <- CreateAssayObject(counts = sample24.data[["Antibody Capture"]])
+sample24$sampleID <- "sample24"
+```
+
+```{r}
+sample25_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample25/'
+sample25.data <- Read10X(data.dir =sample25_dir)
+sample25 <- CreateSeuratObject(counts = sample25.data[["Gene Expression"]])
+sample25[["ADT"]] <- CreateAssayObject(counts = sample25.data[["Antibody Capture"]])
+sample25$sampleID <- "sample25"
+```
+
+```{r}
+sample26_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample26/'
+sample26.data <- Read10X(data.dir =sample26_dir)
+sample26 <- CreateSeuratObject(counts = sample26.data[["Gene Expression"]])
+sample26[["ADT"]] <- CreateAssayObject(counts = sample26.data[["Antibody Capture"]])
+sample26$sampleID <- "sample26"
+```
+
+```{r}
+sample31_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample31/'
+sample31.data <- Read10X(data.dir =sample31_dir)
+sample31 <- CreateSeuratObject(counts = sample31.data[["Gene Expression"]])
+sample31[["ADT"]] <- CreateAssayObject(counts = sample31.data[["Antibody Capture"]])
+sample31$sampleID <- "sample31"
+```
+
+```{r}
+sample35_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample35/'
+sample35.data <- Read10X(data.dir =sample35_dir)
+sample35 <- CreateSeuratObject(counts = sample35.data[["Gene Expression"]])
+sample35[["ADT"]] <- CreateAssayObject(counts = sample35.data[["Antibody Capture"]])
+sample35$sampleID <- "sample35"
+```
+
+```{r}
+sample36_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample36/'
+sample36.data <- Read10X(data.dir =sample36_dir)
+sample36 <- CreateSeuratObject(counts = sample36.data[["Gene Expression"]])
+sample36[["ADT"]] <- CreateAssayObject(counts = sample36.data[["Antibody Capture"]])
+sample36$sampleID <- "sample36"
+```
+
+```{r}
+sample37_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample37/'
+sample37.data <- Read10X(data.dir =sample37_dir)
+sample37 <- CreateSeuratObject(counts = sample37.data[["Gene Expression"]])
+sample37[["ADT"]] <- CreateAssayObject(counts = sample37.data[["Antibody Capture"]])
+sample37$sampleID <- "sample37"
+```
+
+```{r}
+sample38_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample38/'
+sample38.data <- Read10X(data.dir =sample38_dir)
+sample38 <- CreateSeuratObject(counts = sample38.data[["Gene Expression"]])
+sample38[["ADT"]] <- CreateAssayObject(counts = sample38.data[["Antibody Capture"]])
+sample38$sampleID <- "sample38"
+```
+
+```{r}
+sample40_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample40/'
+sample40.data <- Read10X(data.dir =sample40_dir)
+sample40 <- CreateSeuratObject(counts = sample40.data[["Gene Expression"]])
+sample40[["ADT"]] <- CreateAssayObject(counts = sample40.data[["Antibody Capture"]])
+sample40$sampleID <- "sample40"
+```
+
+```{r}
+sample43_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample43/'
+sample43.data <- Read10X(data.dir =sample43_dir)
+sample43 <- CreateSeuratObject(counts = sample43.data[["Gene Expression"]])
+sample43[["ADT"]] <- CreateAssayObject(counts = sample43.data[["Antibody Capture"]])
+sample43$sampleID <- "sample43"
+```
+
+```{r}
+sample44_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample44/'
+sample44.data <- Read10X(data.dir =sample44_dir)
+sample44 <- CreateSeuratObject(counts = sample44.data[["Gene Expression"]])
+sample44[["ADT"]] <- CreateAssayObject(counts = sample44.data[["Antibody Capture"]])
+sample44$sampleID <- "sample44"
+```
+
+```{r}
+sample46_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample46/'
+sample46.data <- Read10X(data.dir =sample46_dir)
+sample46 <- CreateSeuratObject(counts = sample46.data[["Gene Expression"]])
+sample46[["ADT"]] <- CreateAssayObject(counts = sample46.data[["Antibody Capture"]])
+sample46$sampleID <- "sample46"
+```
+
+```{r}
+sample47_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample47/'
+sample47.data <- Read10X(data.dir =sample47_dir)
+sample47 <- CreateSeuratObject(counts = sample47.data[["Gene Expression"]])
+sample47[["ADT"]] <- CreateAssayObject(counts = sample47.data[["Antibody Capture"]])
+sample47$sampleID <- "sample47"
+```
+
+```{r}
+sample48_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample48/'
+sample48.data <- Read10X(data.dir =sample48_dir)
+sample48 <- CreateSeuratObject(counts = sample48.data[["Gene Expression"]])
+sample48[["ADT"]] <- CreateAssayObject(counts = sample48.data[["Antibody Capture"]])
+sample48$sampleID <- "sample48"
+```
+
+```{r}
+sample50_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/sample50/'
+sample50.data <- Read10X(data.dir =sample50_dir)
+sample50 <- CreateSeuratObject(counts = sample50.data[["Gene Expression"]])
+sample50[["ADT"]] <- CreateAssayObject(counts = sample50.data[["Antibody Capture"]])
+sample50$sampleID <- "sample50"
+```
+
+```{r}
+WashU1_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/WashU1/'
+WashU1.data <- Read10X(data.dir =WashU1_dir)
+WashU1 <- CreateSeuratObject(counts = WashU1.data[["Gene Expression"]])
+WashU1[["ADT"]] <- CreateAssayObject(counts = WashU1.data[["Antibody Capture"]])
+WashU1$sampleID <- "WashU1"
+```
+
+```{r}
+WashU2_dir <- '/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/CITE-seq/Sequencing/CellRangerOutput/WashU2/'
+WashU2.data <- Read10X(data.dir =WashU2_dir)
+WashU2 <- CreateSeuratObject(counts = WashU2.data[["Gene Expression"]])
+WashU2[["ADT"]] <- CreateAssayObject(counts = WashU2.data[["Antibody Capture"]])
+WashU2$sampleID <- "WashU2"
+```
+
+```{r}
+sample <- merge(sample10, y = c(sample11,sample14,sample16,sample18,sample19,sample20,sample21,sample22,sample23,sample24,sample25,sample26,sample31,sample35,sample36,sample37,sample38,sample40,sample43,sample44,sample46,sample47,sample48,sample50,WashU1,WashU2))
+save(sample, file="./merged_preQC.Robj")
+```
+
+```{r}
+load("./merged_preQC.Robj")
+```
+
+```{r}
+Idents(sample) <- "sampleID"
+sample <- subset(sample, idents = c("sample10","sample11","sample14","sample16","sample18","sample19","sample20","sample21","sample22","sample23","sample24","sample25","sample26","sample31","sample35","sample36","sample37","sample38","sample40","sample43","sample44","sample46","sample47","sample48","sample50","WashU1","WashU2"))
+```
+
+# Look at the features
+```{r}
+sample[["percent.mt"]] <- PercentageFeatureSet(sample, pattern = "^MT-")
+sample[["percent.ribo"]] <- PercentageFeatureSet(sample, pattern = "^RP[SL]")
+VlnPlot(sample, features = c("nCount_RNA", "nCount_ADT", "percent.mt"), ncol = 3, pt.size = 0, group.by = "orig.ident")
+```
+
+```{r}
+sample
+```
+
+# Filtering
+```{r}
+sample_filtered <- subset(sample, subset = nFeature_RNA > 200 & percent.mt < 20 & nCount_RNA > 500 & nCount_RNA < 25000 & nCount_ADT < 10000)
+```
+
+```{r}
+VlnPlot(sample_filtered, features = c("nCount_RNA", "nCount_ADT", "percent.mt"), ncol = 3, pt.size = 0, group.by = "orig.ident")
+```
+
+```{r}
+sample_filtered
+```
+
+```{r}
+VlnPlot(sample_filtered, features = c("nFeature_RNA"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered, features = c("nCount_RNA"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered, features = c("nFeature_ADT"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered, features = c("nCount_ADT"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered, features = c("percent.mt"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered, features = c("percent.ribo"), group.by = "sampleID", pt.size = 0) + NoLegend()
+```
+
+# Exclude sample 21 due to poor QC (likely too many cells loaded onto chip).
+```{r}
+Idents(sample_filtered) <- "sampleID"
+sample_filtered <- subset(sample_filtered, idents = c("sample10","sample11","sample14","sample16","sample18","sample19","sample20","sample22","sample23","sample24","sample25","sample26","sample31","sample35","sample36","sample37","sample38","sample40","sample43","sample44","sample46","sample47","sample48","sample50","WashU1","WashU2"))
+```
+
+```{r}
+sample_filtered
+```
+
+```{r}
+SaveH5Seurat(sample_filtered, filename = "./merged_postQC.h5Seurat")
+```
+
+```{r}
+Convert("./merged_postQC.h5Seurat", dest = "h5ad")
+```
+
+```{r}
+#### Load in doublet output
+scrub = read.csv('./scrublet/scrublet-scores/all.csv',header=T,row.names=1)
+```
+
+```{r}
+sample_filtered@meta.data$scrublet_score = scrub$scrublet_score
+sample_filtered@meta.data$scrublet_cluster_score = scrub$scrublet_cluster_score
+sample_filtered@meta.data$bh_pval = scrub$bh_pval
+```
+
+```{r}
+VlnPlot(sample_filtered, group.by = "sampleID", features = "scrublet_score", pt.size = 0) + NoLegend()
+```
+
+```{r}
+sample_filtered
+```
+
+```{r}
+sample_filtered2 <- subset(
+  x = sample_filtered,
+  subset = scrublet_score < 0.25
+)
+```
+
+```{r}
+sample_filtered2
+```
+
+```{r}
+VlnPlot(sample_filtered2, features = c("nFeature_RNA"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered2, features = c("nCount_RNA"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered2, features = c("nFeature_ADT"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered2, features = c("nCount_ADT"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered2, features = c("percent.mt"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered2, features = c("percent.ribo"), group.by = "sampleID", pt.size = 0) + NoLegend()
+VlnPlot(sample_filtered2, group.by = "sampleID", features = "scrublet_score", pt.size = 0) + NoLegend()
+```
+
+```{r}
+saveRDS(sample_filtered2, "./merged_postQC_doubletRemoval.rds")
+```
+
+
+
+
+
+

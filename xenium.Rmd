@@ -1,0 +1,618 @@
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(sctransform)
+library(ggplot2)
+library(harmony)
+library(ArchR)
+library(ggsci)
+options(future.globals.maxSize = 90000 * 1024^2) # for 50 Gb RAM
+```
+
+```{r}
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_1__20240621__170414"
+s1 <- LoadXenium(path, fov = "fov")
+s1 <- subset(s1, subset = nCount_Xenium > 0)
+s1$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_3__20240621__170414"
+s2 <- LoadXenium(path, fov = "fov")
+s2 <- subset(s2, subset = nCount_Xenium > 0)
+s2$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_5__20240621__170414"
+s3 <- LoadXenium(path, fov = "fov")
+s3 <- subset(s3, subset = nCount_Xenium > 0)
+s3$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0005092__Region_6__20240621__170414"
+s4 <- LoadXenium(path, fov = "fov")
+s4 <- subset(s4, subset = nCount_Xenium > 0)
+s4$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0010699__Region_1__20240621__170414"
+s5 <- LoadXenium(path, fov = "fov")
+s5 <- subset(s5, subset = nCount_Xenium > 0)
+s5$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0010699__Region_2__20240621__170414"
+s6 <- LoadXenium(path, fov = "fov")
+s6 <- subset(s6, subset = nCount_Xenium > 0)
+s6$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine1_20240621_Xenium/output-XETG00113__0010699__Region_3__20240621__170414"
+s7 <- LoadXenium(path, fov = "fov")
+s7 <- subset(s7, subset = nCount_Xenium > 0)
+s7$disease <- "Mild"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0005113__Region_1__20240628__212431"
+s8 <- LoadXenium(path, fov = "fov")
+s8 <- subset(s8, subset = nCount_Xenium > 0)
+s8$disease <- "Severe"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0005113__Region_2__20240628__212431"
+s9 <- LoadXenium(path, fov = "fov")
+s9 <- subset(s9, subset = nCount_Xenium > 0)
+s9$disease <- "Severe"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0005113__Region_3__20240628__212431"
+s10 <- LoadXenium(path, fov = "fov")
+s10 <- subset(s10, subset = nCount_Xenium > 0)
+s10$disease <- "Severe"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0010641__Region_1__20240628__212431"
+s11 <- LoadXenium(path, fov = "fov")
+s11 <- subset(s11, subset = nCount_Xenium > 0)
+s11$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0010641__Region_3__20240628__212431"
+s12 <- LoadXenium(path, fov = "fov")
+s12 <- subset(s12, subset = nCount_Xenium > 0)
+s12$disease <- "Moderate"
+
+path <- "../xenium_data/SR005130_Lavine2_20240628_Xenium/output-XETG00113__0010641__Region_5__20240628__212431"
+s13 <- LoadXenium(path, fov = "fov")
+s13 <- subset(s13, subset = nCount_Xenium > 0)
+s13$disease <- "Mild"
+```
+
+```{r}
+xenium.obj <- merge(s1, y=c(s2,s3,s4,s5,s6,s7,s8,s9,s10,s11,s12,s13))
+```
+
+```{r}
+xenium.obj
+```
+
+```{r}
+xenium.obj <- subset(xenium.obj, subset = nCount_Xenium > 10)
+```
+
+```{r}
+xenium.obj
+```
+```{r}
+xenium.obj <- readRDS("xenium.obj.integrated.rds")
+```
+
+```{r}
+xenium.obj2$disease <- xenium.obj$disease
+```
+
+```{r}
+pdf("xenium_QC.pdf", useDingbats = FALSE, width=7, height=5)
+VlnPlot(xenium.obj, features = c("nFeature_Xenium", "nCount_Xenium"), ncol = 2, pt.size = 0)
+dev.off()
+```
+
+```{r}
+xenium.obj <- SCTransform(xenium.obj, assay = "Xenium")
+xenium.obj <- RunPCA(xenium.obj, npcs = 50, features = rownames(xenium.obj))
+xenium.obj <- RunUMAP(xenium.obj, dims = 1:50)
+xenium.obj <- FindNeighbors(xenium.obj, reduction = "pca", dims = 1:50)
+xenium.obj <- FindClusters(xenium.obj, resolution = c(0.1,0.2,0.3,0.4))
+```
+
+```{r}
+pdf("SCT_snn_res.0.1_umap.pdf", useDingbats = FALSE, width=7, height=5)
+
+DimPlot(xenium.obj, group.by = "SCT_snn_res.0.1", cols = "polychrome")
+
+dev.off()
+```
+
+```{r}
+pdf("./fov.13_SCT_snn_res.0.1.pdf", useDingbats = FALSE, width=7, height=5)
+ImageDimPlot(xenium.obj, cols = "polychrome", size = 0.4, fov = "fov.13", group.by = "SCT_snn_res.0.1")
+dev.off()
+```
+
+```{r}
+DefaultAssay(xenium.obj) <- 'SCT'
+Idents(xenium.obj) <- "SCT_snn_res.0.1"
+rna.rnamarkers <- FindAllMarkers(xenium.obj, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.rnamarkers, file ="./DE_SCT_snn_res.0.1.csv", quote = FALSE)
+```
+
+```{r}
+ImageDimPlot(xenium.obj, cols = "red", cells = WhichCells(xenium.obj, idents = 2))
+```
+
+```{r}
+saveRDS(xenium.obj2, "./xenium.obj.integrated.rds")
+```
+
+```{r}
+xenium.obj <- readRDS("xenium.obj.integrated.rds")
+```
+
+```{r}
+xenium.obj@meta.data
+```
+
+```{r}
+ImageFeaturePlot(xenium.obj, features = c("MGP"), size = 0.75, cols = c("white", "red"), fov = "fov.9", max.cutoff=3)
+```
+
+```{r}
+pdf("dotplot_mgp_vcan_ltbp2.pdf", useDingbats = FALSE, width=4, height=3.5)
+DotPlot(xenium.obj, features = c("MGP","VCAN","LTBP2"), group.by = "disease") + RotatedAxis()
+dev.off()
+```
+
+
+# Ref Map to Human Global
+```{r}
+DefaultAssay(ref) <- "SCT"
+anchors <- FindTransferAnchors(
+  reference = ref,
+  query = xenium.obj,
+  normalization.method = "SCT",
+  reference.reduction = "harmony",
+  dims = 1:50,
+  recompute.residuals = FALSE
+)
+
+predictions <- TransferData(anchorset = anchors, refdata = ref$cell.type, dims = 1:50)
+xenium.obj <- AddMetaData(xenium.obj, metadata = predictions)
+predictions <- TransferData(anchorset = anchors, refdata = GetAssayData(ref, assay="ADT"), dims = 1:50)
+xenium.obj@assays[["CITE"]] <- predictions
+```
+
+```{r}
+pdf("mapped_cell.type.disease_umap.pdf", useDingbats = FALSE, width=10, height=5)
+
+DimPlot(xenium.obj2, group.by = "predicted.id", cols = paletteDiscrete(unique(ref$cell.type), set = "stallion"), split.by = "disease")
+
+dev.off()
+```
+
+```{r}
+DimPlot(xenium.obj, group.by = "predicted.id", cols = paletteDiscrete(unique(ref$cell.type), set = "stallion"))
+```
+
+```{r}
+pdf("./fov_predicted.id.pdf", useDingbats = FALSE, width=7, height=5)
+ImageDimPlot(xenium.obj, group.by = "predicted.id", cols = paletteDiscrete(unique(ref$cell.type), set = "stallion"), fov="fov")
+dev.off()
+```
+
+```{r}
+ImageFeaturePlot(xenium.obj, features = c("MFGE8"), size = 0.75, cols = c("white", "red"), fov = "fov.10")
+```
+
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+ImageDimPlot(xenium.obj, cols = "red", cells = WhichCells(xenium.obj, idents = "ModSMC"), fov = "fov.6")
+```
+
+```{r}
+write.csv(xenium.obj@meta.data, file = "./xenium.obj.integrated.mapped.meta.csv", quote = TRUE)
+```
+
+```{r}
+xenium.obj <- readRDS("xenium.obj.integrated.rds")
+```
+
+```{r}
+FeaturePlot(xenium.obj, features = "OLR1")
+```
+
+```{r}
+xenium.Endothelium <- readRDS("xenium.Endothelium.rds")
+xenium.Myeloid <- readRDS("xenium.Myeloid.rds")
+xenium.stroma <- readRDS("xenium.stroma.rds")
+xenium.TCells <- readRDS("xenium.TCells.rds")
+```
+
+```{r}
+write.csv(xenium.Endothelium@meta.data, file = "./xenium.Endothelium.mapped.meta.csv", quote = TRUE)
+write.csv(xenium.Myeloid@meta.data, file = "./xenium.Myeloid.mapped.meta.csv", quote = TRUE)
+write.csv(xenium.stroma@meta.data, file = "./xenium.stroma.mapped.meta.csv", quote = TRUE)
+write.csv(xenium.TCells@meta.data, file = "./xenium.TCells.mapped.meta.csv", quote = TRUE)
+```
+
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+ImageDimPlot(xenium.obj, cols = "red", cells = WhichCells(xenium.obj, idents = "ModSMC"), fov = "fov.6")
+```
+
+##################### Storma
+
+# Subset stroma for cell state mapping
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+stroma <- subset(xenium.obj, idents = c("Fibroblast2","Fibroblast1","SMCPericyte","ModSMC"))
+```
+
+# Reference Mapping
+```{r}
+reference <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/cell_types/smc_fib/smc_fib_annotated.rds")
+```
+
+```{r}
+DefaultAssay(reference) <- "SCT"
+DefaultAssay(stroma) <- "SCT"
+
+anchors <- FindTransferAnchors(
+  reference = reference,
+  query = stroma,
+  normalization.method = "SCT",
+  dims = 1:50,
+  reference.assay = "SCT",
+  reference.reduction = "pca"
+)
+```
+
+```{r}
+stroma <- MapQuery(
+  anchorset = anchors,
+  query = stroma,
+  reference = reference,
+  refdata = list(
+    celltype = "cell.state",
+    predicted_ADT = "ADT"),
+  reference.reduction = "pca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+DimPlot(stroma, reduction = "ref.umap", group.by = "predicted.celltype",label.size = 4,
+        cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"), label = FALSE)
+```
+
+```{r}
+stroma <- RunUMAP(stroma, dims = 1:50)
+```
+```{r}
+RidgePlot(stroma, features = "prediction.score.max", group.by = "orig.ident")
+```
+
+
+```{r}
+pdf("mapped_stroma_cell.state_umap.pdf", useDingbats = FALSE, width=7, height=5)
+
+DimPlot(stroma, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"))
+
+dev.off()
+```
+
+```{r}
+pdf("./fov_stroma_cell.state.pdf", useDingbats = FALSE, width=7, height=5)
+ImageDimPlot(stroma, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"), fov="fov")
+dev.off()
+```
+
+```{r}
+saveRDS(stroma, "xenium.stroma.rds")
+```
+
+```{r}
+stroma <- readRDS("xenium.stroma.rds")
+```
+
+```{r}
+DimPlot(stroma, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"))
+```
+
+
+##################### Myeloid
+
+# Subset stroma for cell state mapping
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+Myeloid <- subset(xenium.obj, idents = c("Myeloid"))
+```
+
+# Reference Mapping
+```{r}
+reference <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/cell_types/myeloid/final/myeloid_annotated.rds")
+```
+
+```{r}
+DefaultAssay(reference) <- "SCT"
+DefaultAssay(Myeloid) <- "SCT"
+
+anchors <- FindTransferAnchors(
+  reference = reference,
+  query = Myeloid,
+  normalization.method = "SCT",
+  dims = 1:50,
+  reference.assay = "SCT",
+  reference.reduction = "pca"
+)
+```
+```{r}
+reference <- RunUMAP(reference, reduction = "harmony_rna", dims = 1:50,
+                  reduction.name = 'rna.umap', reduction.key = 'rnaUMAP_', assay = "RNA", return.model = TRUE)
+```
+
+```{r}
+Myeloid <- MapQuery(
+  anchorset = anchors,
+  query = Myeloid,
+  reference = reference,
+  refdata = list(
+    celltype = "cell.state",
+    predicted_ADT = "ADT"),
+  reference.reduction = "pca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+DimPlot(Myeloid, reduction = "ref.umap", group.by = "predicted.celltype",label.size = 4,
+        cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"), label = FALSE)
+```
+
+```{r}
+Myeloid <- RunUMAP(Myeloid, dims = 1:50)
+```
+
+```{r}
+RidgePlot(Myeloid, features = "prediction.score.max", group.by = "orig.ident")
+```
+
+```{r}
+pdf("mapped_stroma_cell.state_umap.pdf", useDingbats = FALSE, width=7, height=5)
+
+DimPlot(Myeloid, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"))
+
+dev.off()
+```
+
+```{r}
+pdf("./fov.13_Myeloid_cell.state.pdf", useDingbats = FALSE, width=7, height=5)
+ImageDimPlot(Myeloid, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"), fov="fov.13")
+dev.off()
+```
+
+```{r}
+saveRDS(Myeloid, "xenium.Myeloid.rds")
+```
+
+
+
+
+
+##################### Endothelium
+
+# Subset stroma for cell state mapping
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+Endothelium <- subset(xenium.obj, idents = c("Endothelium"))
+```
+
+# Reference Mapping
+```{r}
+reference <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/cell_types/endothelium/endothelium.rds")
+```
+
+```{r}
+DefaultAssay(reference) <- "SCT"
+DefaultAssay(Endothelium) <- "SCT"
+
+anchors <- FindTransferAnchors(
+  reference = reference,
+  query = Endothelium,
+  normalization.method = "SCT",
+  dims = 1:50,
+  reference.assay = "SCT",
+  reference.reduction = "pca"
+)
+```
+```{r}
+reference <- RunUMAP(reference, reduction = "harmony_rna", dims = 1:50,
+                  reduction.name = 'rna.umap', reduction.key = 'rnaUMAP_', assay = "RNA", return.model = TRUE)
+```
+
+```{r}
+Endothelium <- MapQuery(
+  anchorset = anchors,
+  query = Endothelium,
+  reference = reference,
+  refdata = list(
+    celltype = "cell.state",
+    predicted_ADT = "ADT"),
+  reference.reduction = "pca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+DimPlot(Endothelium, reduction = "ref.umap", group.by = "predicted.celltype",label.size = 4,
+        cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"), label = FALSE)
+```
+
+```{r}
+Endothelium <- RunUMAP(Endothelium, dims = 1:50)
+```
+
+```{r}
+RidgePlot(Endothelium, features = "prediction.score.max", group.by = "orig.ident")
+```
+
+```{r}
+pdf("mapped_Endothelium_cell.state_umap.pdf", useDingbats = FALSE, width=7, height=5)
+
+DimPlot(Endothelium, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"))
+
+dev.off()
+```
+
+```{r}
+pdf("./fov.13_Endothelium_cell.state.pdf", useDingbats = FALSE, width=7, height=5)
+ImageDimPlot(Endothelium, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"), fov="fov.13")
+dev.off()
+```
+
+```{r}
+saveRDS(Endothelium, "xenium.Endothelium.rds")
+```
+
+
+##################### TCells
+
+# Subset TCells for cell state mapping
+```{r}
+Idents(xenium.obj) <- "predicted.id"
+TCells <- subset(xenium.obj, idents = c("TCells"))
+```
+
+# Reference Mapping
+```{r}
+reference <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/cell_types/t_nk_cells/tnkcells.rds")
+```
+
+```{r}
+DefaultAssay(reference) <- "SCT"
+DefaultAssay(TCells) <- "SCT"
+
+anchors <- FindTransferAnchors(
+  reference = reference,
+  query = TCells,
+  normalization.method = "SCT",
+  dims = 1:50,
+  reference.assay = "SCT",
+  reference.reduction = "pca"
+)
+```
+
+```{r}
+reference <- RunUMAP(reference, reduction = "harmony_rna", dims = 1:50,
+                  reduction.name = 'rna.umap', reduction.key = 'rnaUMAP_', assay = "RNA", return.model = TRUE)
+```
+
+```{r}
+TCells <- MapQuery(
+  anchorset = anchors,
+  query = TCells,
+  reference = reference,
+  refdata = list(
+    celltype = "cell.state.l2",
+    predicted_ADT = "ADT"),
+  reference.reduction = "pca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+DimPlot(TCells, reduction = "ref.umap", group.by = "predicted.celltype",label.size = 4,
+        cols = paletteDiscrete(unique(reference$cell.state.l2), set = "stallion"), label = FALSE)
+```
+
+```{r}
+TCells <- RunUMAP(TCells, dims = 1:50)
+```
+
+```{r}
+RidgePlot(TCells, features = "prediction.score.max", group.by = "orig.ident")
+```
+
+```{r}
+pdf("mapped_TCells_cell.state_umap.pdf", useDingbats = FALSE, width=7, height=5)
+
+DimPlot(TCells, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state.l2), set = "stallion"))
+
+dev.off()
+```
+
+```{r}
+pdf("./fov.13_TCells_cell.state.pdf", useDingbats = FALSE, width=7, height=5)
+ImageDimPlot(TCells, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state.l2), set = "stallion"), fov="fov.13")
+dev.off()
+```
+
+```{r}
+saveRDS(TCells, "xenium.TCells.rds")
+```
+
+
+
+```{r}
+stroma <- readRDS("xenium.stroma.rds")
+```
+
+```{r}
+DimPlot(stroma, group.by = "predicted.celltype", cols = paletteDiscrete(unique(reference$cell.state), set = "stallion"))
+```
+
+```{r}
+pdf("./mapping_ridge.pdf", useDingbats = FALSE, width=6, height=4)
+RidgePlot(stroma, features = "predicted.celltype.score", group.by = "predicted.celltype")+  scale_fill_manual(values=paletteDiscrete(unique(reference$cell.state), set = "stallion"))
+dev.off()
+```
+
+```{r}
+stroma <- RunUMAP(stroma, dims = 1:50)
+stroma <- FindNeighbors(stroma, reduction = "pca", dims = 1:50)
+stroma <- FindClusters(stroma, resolution = c(0.1,0.2,0.3,0.4,0.5))
+```
+
+```{r}
+DimPlot(stroma, group.by = "SCT_snn_res.0.2", cols = paletteDiscrete(unique(stroma$SCT_snn_res.0.2), set = "stallion"))
+```
+
+```{r}
+ImageDimPlot(stroma, group.by = "SCT_snn_res.0.2", cols = paletteDiscrete(unique(stroma$SCT_snn_res.0.2), set = "stallion"), fov="fov.10")
+```
+
+```{r}
+DefaultAssay(stroma) <- 'SCT'
+Idents(stroma) <- "SCT_snn_res.0.2"
+rna.rnamarkers <- FindAllMarkers(stroma, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.rnamarkers, file ="./stroma.cell.state/DE_stroma_SCT_snn_res.0.2.csv", quote = FALSE)
+```
+
+```{r}
+x <- intersect(c("MGP","LUM","VCAN","F2R","OMD","LTBP2","FAP","FN1","COL1A2","CFH","PLXDC2","THBS2","ITGBL1","PRELP","FBLN2","PDFRA","DCN","MMP2","PDGFD,","FXYD5","POSTN","LAMA2","MEG3","COL3A1","TMSB10","CRTAC1","PCOLCE2","COL8A1"), rownames(xenium.obj))
+```
+
+```{r}
+ImageFeaturePlot(xenium.obj, features = c("MGP"), size = 0.75, cols = c("white", "red"), fov = "fov", max.cutoff=3)
+ImageFeaturePlot(xenium.obj, features = c("MGP"), size = 0.75, cols = c("white", "red"), fov = "fov.9", max.cutoff=3)
+ImageFeaturePlot(xenium.obj, features = c("MGP"), size = 0.75, cols = c("white", "red"), fov = "fov.10", max.cutoff=3)
+```
+```{r}
+ImageFeaturePlot(xenium.obj, features = c("VCAN"), size = 0.75, cols = c("white", "red"), fov = "fov", max.cutoff=3)
+ImageFeaturePlot(xenium.obj, features = c("VCAN"), size = 0.75, cols = c("white", "red"), fov = "fov.9", max.cutoff=3)
+ImageFeaturePlot(xenium.obj, features = c("VCAN"), size = 0.75, cols = c("white", "red"), fov = "fov.10", max.cutoff=3)
+```
+
+```{r}
+ImageFeaturePlot(xenium.obj, features = c("LTBP2"), size = 0.75, cols = c("white", "red"), fov = "fov", max.cutoff=2)
+ImageFeaturePlot(xenium.obj, features = c("LTBP2"), size = 0.75, cols = c("white", "red"), fov = "fov.9", max.cutoff=2)
+ImageFeaturePlot(xenium.obj, features = c("LTBP2"), size = 0.75, cols = c("white", "red"), fov = "fov.10", max.cutoff=2)
+```
+```{r}
+ImageFeaturePlot(xenium.obj, features = c("TNFRSF11B"), size = 0.75, cols = c("white", "red"), fov = "fov", max.cutoff=2)
+ImageFeaturePlot(xenium.obj, features = c("TNFRSF11B"), size = 0.75, cols = c("white", "red"), fov = "fov.9", max.cutoff=2)
+ImageFeaturePlot(xenium.obj, features = c("TNFRSF11B"), size = 0.75, cols = c("white", "red"), fov = "fov.10", max.cutoff=2)
+```
+
+
+
+
+

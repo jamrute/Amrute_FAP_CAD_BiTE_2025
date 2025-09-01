@@ -1,0 +1,491 @@
+```{r}
+library(dplyr)
+library(Seurat)
+library(patchwork)
+library(SeuratDisk)
+library(sctransform)
+library(ggplot2)
+library(harmony)
+library(ArchR)
+library(ggsci)
+```
+
+```{r}
+global <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary\ Projects/CAD_Project/Projects/CITE-seq\ Atlas/analysis/final_analysis/4\ -\ annotate/integrated_annotated.rds")
+```
+
+```{r}
+ggplot(global@meta.data, aes(x=Race, fill=cell.type)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=as.vector(paletteDiscrete(unique(global$cell.type), set = "stallion"))) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+Idents(global) <- "cell.type"
+levels(global)
+```
+
+```{r}
+sample <- subset(global, idents = c("SMCPericyte", "ModSMC", "Fibroblast1", "Fibroblast2"))
+```
+
+# RNA
+```{r}
+DefaultAssay(sample) <- "RNA"
+sample <- NormalizeData(sample)
+all.genes <- rownames(sample)
+sample <- ScaleData(sample, features = all.genes)
+sample <- FindVariableFeatures(sample, selection.method = "vst", nfeatures = 3000)
+sample <- RunPCA(sample, features = VariableFeatures(object = sample), npcs=100, verbose=TRUE)
+sample <- RunHarmony(sample, c("sampleID"), reduction = "pca", reduction.save = "harmony_rna", assay.use = "RNA")
+sample <- RunUMAP(sample, reduction = "harmony_rna", dims = 1:50,
+                  reduction.name = 'rna.umap', reduction.key = 'rnaUMAP_', assay = "RNA")
+sample <- FindNeighbors(sample, reduction = "harmony_rna", dims = 1:50)
+sample <- FindClusters(sample, graph.name = "RNA_snn", algorithm = 3, resolution = c(0.1,0.2,0.3), verbose = FALSE)
+```
+
+```{r}
+DefaultAssay(sample) <- "ADT"
+sample <- NormalizeData(sample, normalization.method = 'CLR', margin = 2) %>% ScaleData()
+```
+
+```{r}
+DimPlot(sample, reduction = 'rna.umap', group.by = 'RNA_snn_res.0.3',label.size = 4,label=TRUE, cols = paletteDiscrete(unique(sample$RNA_snn_res.0.3), set = "stallion"))
+```
+
+```{r}
+DefaultAssay(sample) <- "RNA"
+FeaturePlot(sample, reduction = 'rna.umap', features = "MYH11") + scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,4))
+
+FeaturePlot(sample, reduction = 'rna.umap', features = "POSTN") + scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,1))
+```
+
+```{r}
+DefaultAssay(sample) <- "ADT"
+FeaturePlot(sample, reduction = 'rna.umap', features = "FAP.1") + scale_color_gradientn(colors=paletteContinuous("blueYellow"), oob=scales::squish, limits=c(0,1))
+
+FeaturePlot(sample, reduction = 'rna.umap', features = "THY1.1") + scale_color_gradientn(colors=paletteContinuous("blueYellow"), oob=scales::squish, limits=c(0,3))
+```
+
+
+```{r}
+DefaultAssay(sample) <- 'RNA'
+Idents(sample) <- "RNA_snn_res.0.3"
+rna.rnamarkers <- FindAllMarkers(sample, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.rnamarkers, file ="./v1_DE_RNA_snn_res.0.3.csv", quote = FALSE)
+```
+
+```{r}
+Idents(sample) <- "RNA_snn_res.0.3"
+levels(sample)
+```
+
+```{r}
+sample <- subset(sample, idents = c("0","1","2","3","4","5","6","8"))
+```
+
+```{r}
+sample <- RunUMAP(sample, reduction = "harmony_rna", dims = 1:50,
+                  reduction.name = 'rna.umap', reduction.key = 'rnaUMAP_', assay = "RNA", return.model = TRUE)
+```
+
+```{r}
+sample <- FindNeighbors(sample, reduction = "harmony_rna", dims = 1:50)
+sample <- FindClusters(sample, graph.name = "RNA_snn", algorithm = 3, resolution = c(0.1,0.2,0.3), verbose = FALSE)
+```
+
+```{r}
+DimPlot(sample, reduction = 'rna.umap', group.by = 'RNA_snn_res.0.3',label.size = 4,label=FALSE, cols = paletteDiscrete(unique(sample$RNA_snn_res.0.3), set = "stallion"))
+```
+
+```{r}
+DefaultAssay(sample) <- 'RNA'
+Idents(sample) <- "RNA_snn_res.0.3"
+rna.rnamarkers <- FindAllMarkers(sample, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.rnamarkers, file ="./v2_DE_RNA_snn_res.0.3.csv", quote = FALSE)
+```
+
+```{r}
+DefaultAssay(sample) <- 'ADT'
+Idents(sample) <- "RNA_snn_res.0.3"
+rna.rnamarkers <- FindAllMarkers(sample, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv(rna.rnamarkers, file ="./v2_DE_ADT_snn_res.0.3.csv", quote = FALSE)
+```
+
+```{r}
+saveRDS(sample, "SMCPericyte_Fibroblast.rds")
+```
+
+```{r}
+sample <- readRDS("SMCPericyte_Fibroblast.rds")
+```
+
+```{r}
+DefaultAssay(sample) <- "RNA"
+FeaturePlot(sample, reduction = 'rna.umap', features = "ACTA2") + scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,5))
+
+FeaturePlot(sample, reduction = 'rna.umap', features = "PLA2G2A") + scale_color_gradientn(colors=paletteContinuous("solarExtra"), oob=scales::squish, limits=c(0,3))
+```
+
+```{r}
+DefaultAssay(sample) <- "ADT"
+FeaturePlot(sample, reduction = 'rna.umap', features = "FAP.1") + scale_color_gradientn(colors=paletteContinuous("blueYellow"), oob=scales::squish, limits=c(0,2))
+
+FeaturePlot(sample, reduction = 'rna.umap', features = "THY1.1") + scale_color_gradientn(colors=paletteContinuous("blueYellow"), oob=scales::squish, limits=c(0,6))
+
+FeaturePlot(sample, reduction = 'rna.umap', features = "ITGA2.1") + scale_color_gradientn(colors=paletteContinuous("blueYellow"), oob=scales::squish, limits=c(0,2.5))
+```
+
+# Create heatmaps for GEX
+```{r}
+DefaultAssay(sample) <- "RNA"
+genes <- c("CNN1","CFD","FABP4","CCL19","ANGPTL7","SLC2A1","STEAP4","RSAD2")
+
+DotPlot(sample, features = unique(genes), group.by = "RNA_snn_res.0.3", col.min=0, cols = c("lightgrey", "red")) + RotatedAxis()
+```
+
+```{r}
+DefaultAssay(sample) <- "ADT"
+genes <- c("FAP.1","THY1.1","CD34.1")
+
+DotPlot(sample, features = unique(genes), group.by = "RNA_snn_res.0.3", col.min=0, cols = c("lightgrey", "red")) + RotatedAxis()
+```
+
+# Shades of SMCs
+
+#1. Contractile
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("CNN1","SMTN","ACTA2","TAGLN","MYH11","MYOCD")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$contractile_z<-z_scores[1,]
+FeaturePlot(object=sample, features = "contractile_z",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+
+# 2.Mesenchymal
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("KLF4","CD34","CD44","SCA1","LY6A")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$mesenchymal_z<-z_scores[1,]
+FeaturePlot(object=sample, features = "mesenchymal_z",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+
+# 3. Fibroblast
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("FN1","BGN","DCN","COL1A1")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$fibroblast_z<-z_scores[1,]
+FeaturePlot(object=sample, features = "fibroblast_z",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+
+# 4. Macrophage
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("PTPRC","CD68","ITGAM","LGALS3","ADGRE1")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$macrophage_z<-z_scores[1,]
+FeaturePlot(object=sample, features = "macrophage_z",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+# 5. Osteogenic
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("SP7","SOX9","MSX2","RUNX2")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$osteogenic_z<-z_scores[1,]
+FeaturePlot(object=sample, features = "osteogenic_z",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+# 6. Adipocyte
+```{r}
+DefaultAssay(sample) <- "RNA"
+expdata <- GetAssayData(sample)
+Pop1 <- c("UCP1","ELOVL3","ADIPOQ","PRDM16","PPARGC1A")
+pops<-list(Pop1)
+#Z-Scores
+z_scores<-NULL
+
+for (i in 1:length(pops)) {
+genes <- pops[[i]]
+zz <- which(tolower(rownames(expdata)) %in% tolower(genes))
+av <- numeric(ncol(expdata))
+
+geneExp <- as.matrix(expdata[zz, ])
+geneExp <- t(scale(t(geneExp)))
+geneExp[is.nan(geneExp)] <- 0
+z_scores <- rbind(z_scores,(av + colSums(geneExp) / length(zz)))
+}
+sample@meta.data$adipocyte_z<-z_scores[1,]
+FeaturePlot(object=sample, features = "adipocyte_z",reduction = 'rna.umap') + scale_color_gradientn(colors=c("blue","turquoise2","yellow","red","red4"), oob=scales::squish, limits=c(0,1))
+```
+# Pathway analysis across clusters
+```{r}
+library(clusterProfiler)
+library(DOSE)
+library(enrichplot)
+library(ReactomePA)
+library(ggplot2)
+```
+
+```{r}
+d <- read.csv("./v2_DE_RNA_snn_res.0.3.csv")
+d <- filter(d, avg_log2FC > 0.58)
+d <- filter(d, p_val_adj < 0.05)
+d_new <- d[c("gene", "cluster")]
+```
+
+```{r}
+eg <- bitr(as.character(d_new$gene), fromType="SYMBOL", toType="ENTREZID", OrgDb="org.Hs.eg.db")
+d_new <- filter(d_new, gene %in% eg$SYMBOL)
+d_new_enterzID <- merge(d_new, eg, by.x = "gene", by.y = "SYMBOL")
+d_new_enterzID <- d_new_enterzID[c("ENTREZID", "cluster")]
+geneList <- unstack(d_new_enterzID)
+geneList
+```
+
+```{r}
+ck <- compareCluster(geneCluster = geneList, fun = enrichGO, OrgDb="org.Hs.eg.db")
+ck <- setReadable(ck, OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+head(ck) 
+```
+
+```{r}
+dotplot(ck, font.size = 8) + theme(axis.text.x=element_text(angle=90, hjust=1))
+```
+
+# Progeny
+```{r}
+Idents(sample) <- "RNA_snn_res.0.3"
+```
+
+```{r}
+## We create a data frame with the specification of the cells that belong to 
+## each cluster to match with the Progeny scores.
+CellsClusters <- data.frame(Cell = names(Idents(sample)), 
+    CellType = as.character(Idents(sample)),
+    stringsAsFactors = FALSE)
+```
+
+```{r}
+## We compute the Progeny activity scores and add them to our Seurat object
+## as a new assay called Progeny. 
+sample <- progeny(sample, scale=FALSE, organism="Human", top=500, perm=1, 
+    return_assay = TRUE)
+
+## We can now directly apply Seurat functions in our Progeny scores. 
+## For instance, we scale the pathway activity scores. 
+sample <- Seurat::ScaleData(sample, assay = "progeny") 
+```
+
+```{r}
+## We transform Progeny scores into a data frame to better handling the results
+progeny_scores_df <- 
+    as.data.frame(t(GetAssayData(sample, slot = "scale.data", 
+        assay = "progeny"))) %>%
+    rownames_to_column("Cell") %>%
+    gather(Pathway, Activity, -Cell) 
+
+## We match Progeny scores with the cell clusters.
+progeny_scores_df <- inner_join(progeny_scores_df, CellsClusters)
+
+## We summarize the Progeny scores by cellpopulation
+summarized_progeny_scores <- progeny_scores_df %>% 
+    group_by(Pathway, CellType) %>%
+    summarise(avg = mean(Activity), std = sd(Activity))
+```
+
+```{r}
+## We prepare the data for the plot
+summarized_progeny_scores_df <- summarized_progeny_scores %>%
+    dplyr::select(-std) %>%   
+    spread(Pathway, avg) %>%
+    data.frame(row.names = 1, check.names = FALSE, stringsAsFactors = FALSE) 
+```
+
+```{r}
+paletteLength = 100
+myColor = colorRampPalette(c("Darkblue", "white","red"))(paletteLength)
+
+progenyBreaks = c(seq(min(summarized_progeny_scores_df), 0, 
+                      length.out=ceiling(paletteLength/2) + 1),
+                  seq(max(summarized_progeny_scores_df)/paletteLength, 
+                      max(summarized_progeny_scores_df), 
+                      length.out=floor(paletteLength/2)))
+
+progeny_hmap = pheatmap(t(summarized_progeny_scores_df[,-1]),fontsize=14, 
+                        fontsize_row = 10, 
+                        color=myColor, breaks = progenyBreaks, 
+                        main = "PROGENy (500)", angle_col = 45,
+                        border_color = NA, scale = "row")
+```
+# Palantir
+```{r}
+# Save the normalized SCT matrix
+write.csv(as.matrix(sample[["SCT"]]@scale.data), 
+          file = "./palantir/smc_fibro_SCT_normalized.txt", quote = FALSE)
+
+# Save the meta data
+write.csv(sample@meta.data, file = "./palantir/smc_fibro_meta.csv", quote = TRUE)
+```
+
+```{r}
+sample_meta <- read.csv2('./palantir/palantir_meta_data.csv', header=TRUE, sep=',', row.names = 1)
+sample_2 <- AddMetaData(sample, sample_meta)
+
+sample_2@meta.data$pseudotime <- as.numeric(as.character(sample_2@meta.data$pseudotime))
+sample_2@meta.data$entropy <- as.numeric(as.character(sample_2@meta.data$entropy))
+```
+
+```{r}
+fdl <- read.csv2('./palantir/fdl.csv', header=TRUE, sep=',', row.names = 1)
+fdl$x <- as.double(fdl$x)
+fdl$y <- as.double(fdl$y)
+colnames(fdl) <- paste0("FDL_", 1:2)
+sample[["fdl"]] <- CreateDimReducObject(embeddings = as.matrix(fdl), key = "FDL_")
+```
+
+```{r}
+DimPlot(sample, reduction = 'fdl', group.by = 'RNA_snn_res.0.3',label.size = 4,label=FALSE, cols = paletteDiscrete(unique(sample$RNA_snn_res.0.3), set = "stallion"))
+```
+
+```{r}
+FeaturePlot(sample_2, reduction = "fdl", features = c("pseudotime"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,1)) 
+
+FeaturePlot(sample_2, reduction = "fdl", features = c("entropy"))+ scale_color_gradientn(colors=paletteContinuous("horizon"), oob=scales::squish, limits=c(0,1)) 
+```
+
+# Ref map
+```{r}
+mouse_cleaned <- readRDS("./owens_mapping/mouse_humanHomolog_normalized.rds")
+```
+
+```{r}
+mouse_cleaned <- NormalizeData(mouse_cleaned)
+all.genes <- rownames(mouse_cleaned)
+mouse_cleaned <- ScaleData(mouse_cleaned, features = all.genes)
+```
+
+# Reference Mapping
+```{r}
+sample <- RunSPCA(sample, assay = 'RNA', graph = 'RNA_snn')
+```
+
+```{r}
+mouse_cleaned@assays$SCT <- NULL
+DefaultAssay(mouse_cleaned) <- "RNA"
+```
+
+```{r}
+anchors <- FindTransferAnchors(
+  reference = sample,
+  query = mouse_cleaned,
+  normalization.method = "LogNormalize",
+  reference.reduction = "spca",
+  dims = 1:50,
+  reference.assay = "RNA"
+)
+```
+
+```{r}
+mouse_cleaned <- MapQuery(
+  anchorset = anchors,
+  query = mouse_cleaned,
+  reference = sample,
+  refdata = list(
+    celltype = "RNA_snn_res.0.3",
+    predicted_ADT = "ADT"),
+  reference.reduction = "spca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+Idents(mouse_cleaned) <- "orig.cell"
+SMC <- subset(mouse_cleaned, idents = "SMC")
+```
+
+```{r}
+DimPlot(mouse_cleaned, reduction = "ref.umap", group.by = "predicted.celltype",label.size = 4,
+        cols = paletteDiscrete(unique(sample$RNA_snn_res.0.3), set = "stallion"), label = FALSE)
+```
+
+
+
+
+
+
+
+
+
+

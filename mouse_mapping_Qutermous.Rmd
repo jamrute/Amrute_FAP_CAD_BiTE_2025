@@ -1,0 +1,309 @@
+```{r}
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+library(dplyr)
+library(sctransform)
+library(pheatmap)
+library(Matrix)
+library(RColorBrewer)
+library(scales)
+library(data.table)
+library(stats)
+library("Nebulosa")
+library(ggsci)
+library(ArchR)
+library(biomaRt)
+```
+
+```{r}
+raw_counts <- read.table(file="./GSE131776_mouse_scRNAseq_wirka_et_al_GEO.txt",sep="\t")
+```
+
+```{r}
+head(raw_counts)
+mydata <- CreateSeuratObject(counts = raw_counts, min.cells = 5, min.features = 500)
+```
+
+```{r}
+# store mitochondrial percentage in object meta data
+mydata <- PercentageFeatureSet(mydata, pattern = "^mt-", col.name = "percent.mt")
+```
+
+```{r}
+mydata<-subset(mydata, percent.mt<7.5 & nFeature_RNA>500 & nFeature_RNA<3500)
+```
+
+```{r}
+mydata$sample <- sub(".*\\.", "", colnames(mydata))
+```
+
+```{r}
+unique(mydata$sample)
+```
+
+```{r}
+fun <- function(x) {
+  if (x == "1") {"wt_SMC_baseline"}
+  else if (x == "2") {"wt_nonSMC_baseline"}
+  else if (x == "3") {"wt_SMC_baseline"}
+  else if (x == "4") {"wt_nonSMC_baseline"}
+  else if (x == "5") {"wt_SMC_8wk"}
+  else if (x == "6") {"wt_nonSMC_8wk"}
+  else if (x == "7") {"wt_SMC_8wk"}
+  else if (x == "8") {"wt_nonSMC_8wk"}
+  else if (x == "9") {"ko_SMC_8wk"}
+  else if (x == "10") {"ko_nonSMC_8wk"}
+  else if (x == "11") {"wt_SMC_16wk"}
+  else if (x == "12") {"wt_nonSMC_16wk"}
+  else if (x == "13") {"ko_SMC_16wk"}
+  else if (x == "14") {"ko_nonSMC_16wk"}
+  else if (x == "15") {"wt_SMC_16wk"}
+  else if (x == "16") {"ko_SMC_16wk"}
+  else if (x == "17") {"ko_SMC_16wk"}
+  else if (x == "18") {"ko_nonSMC_16wk"}
+}
+mydata$condition <- mapply(fun, mydata$sample)
+
+Idents(mydata) <- "condition"
+mydata <- subset(mydata, idents = c("wt_SMC_baseline","wt_SMC_8wk","ko_SMC_8wk","wt_SMC_16wk","ko_SMC_16wk"))
+```
+
+```{r}
+sample <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/cell_types/smc_fib/smc_fib_annotated.rds")
+```
+
+```{r}
+mydata <- UpdateSeuratObject(mydata)
+```
+
+```{r}
+mouse_rna_matrix <- mydata@assays[["RNA"]]@counts
+rownames(mouse_rna_matrix) <- mouse_rna_matrix %>% rownames() %>% convert_mouse_to_human_symbols()
+mouse_rna_matrix <- mouse_rna_matrix %>% .[!is.na(rownames(mouse_rna_matrix)), !is.na(colnames(mouse_rna_matrix))]
+mouse_coronary_new <- CreateSeuratObject(counts = mouse_rna_matrix)
+mouse_coronary_new <- AddMetaData(object = mouse_coronary_new, metadata = mydata@meta.data)
+```
+
+```{r}
+DefaultAssay(mouse_coronary_new) <- "RNA"
+DefaultAssay(sample) <- "RNA"
+mouse_coronary_new <- subset(mouse_coronary_new, features = rownames(sample))
+```
+
+# Process the Mouse DataSet
+```{r}
+DefaultAssay(mouse_coronary_new) <- "RNA"
+mouse_coronary_new <- NormalizeData(mouse_coronary_new)
+mouse_coronary_new <- FindVariableFeatures(mouse_coronary_new, selection.method = "vst", nfeatures = 3000)
+mouse_coronary_new <- ScaleData(mouse_coronary_new)
+```
+
+# Reference Mapping
+```{r}
+human_coronary <- sample
+```
+
+```{r}
+anchors <- FindTransferAnchors(
+  reference = human_coronary,
+  query = mouse_coronary_new,
+  normalization.method = "LogNormalize",
+  reference.reduction = "spca",
+  dims = 1:50,
+  reference.assay = "RNA"
+)
+```
+
+```{r}
+mouse_coronary_new <- MapQuery(
+  anchorset = anchors,
+  query = mouse_coronary_new,
+  reference = human_coronary,
+  refdata = list(
+    celltype = "cell.state",
+    predicted_ADT = "ADT"),
+  reference.reduction = "spca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+mouse_coronary_new$condition <- factor(mouse_coronary_new$condition, levels = c("wt_SMC_baseline","wt_SMC_8wk","wt_SMC_16wk","ko_SMC_8wk","ko_SMC_16wk"))
+```
+
+```{r}
+Idents(mouse_coronary_new) <- "condition"
+mouse_coronary_new <- subset(mouse_coronary_new, idents = c("wt_SMC_baseline","wt_SMC_8wk","wt_SMC_16wk"))
+```
+
+```{r}
+DimPlot(mouse_coronary_new, reduction = "ref.umap", group.by = "predicted.celltype", label.size = 4,
+        cols = paletteDiscrete(unique(sample$cell.state), set = "stallion"), label = FALSE)
+```
+
+```{r}
+ggplot(mouse_coronary_new@meta.data, aes(x=condition, fill=predicted.celltype)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=paletteDiscrete(unique(sample$cell.state), set = "stallion")) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+DotPlot(mouse_coronary_new, features = "FAP", group.by = "condition") + RotatedAxis()
+```
+
+```{r}
+RidgePlot(mouse_coronary_new, features = "predicted.celltype.score")
+```
+
+```{r}
+saveRDS(mouse_coronary_new, "TQ_Wirka_mapped.rds")
+```
+
+
+```{r}
+FeaturePlot(mouse_coronary_new, features = "FMC",  reduction = "ref.umap", cols = c("lightgrey", "darkred")) & theme(plot.title = element_text(size = 10))
+```
+
+```{r}
+RidgePlot(mouse_coronary_new, features = "predicted.celltype.score", group.by = "orig.ident", cols = "grey")
+```
+
+
+```{r}
+owens <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/Mouse_mapping/Owens_Mapping/ApoE/Owens_ApoE_plaque_mapped_toCITEseqHuman.rds")
+```
+
+```{r}
+FeaturePlot(owens, features = "FAP",  reduction = "ref.umap", cols = c("lightgrey", "darkred")) & theme(plot.title = element_text(size = 10))
+```
+
+```{r}
+plot_density(owens, features = "FAP")
+```
+
+
+```{r}
+FeaturePlot(owens, features = "FMC",  reduction = "ref.umap", cols = c("lightgrey", "darkred")) & theme(plot.title = element_text(size = 10))
+```
+
+```{r}
+RidgePlot(mouse_coronary_new, features = "predicted.celltype.score", group.by = "condition")
+```
+
+```{r}
+plot_density(mouse_coronary_new, features = "FAP")
+plot_density(owens, features = "FAP")
+```
+```{r}
+Idents(mouse_coronary_new) <- "condition"
+tq_16wk <- subset(mouse_coronary_new, idents = "wt_SMC_16wk")
+```
+
+```{r}
+write.csv(tq_16wk@meta.data, file = "./tq_16wk.csv", quote = TRUE)
+write.csv(owens@meta.data, file = "./owens.csv", quote = TRUE)
+```
+
+
+
+##########################
+```{r}
+owens <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/Mouse_mapping/Owens_Mapping/ApoE/Owens_ApoE_plaque_mapped_toCITEseqHuman.rds")
+```
+
+
+# TQ
+```{r}
+RidgePlot(tq, features = "predicted.celltype.score", group.by = "condition")
+```
+
+```{r}
+Idents(tq) <- "condition"
+tq_WT <- subset(tq, idents = c("wt_SMC_baseline","wt_SMC_8wk","wt_SMC_16wk"))
+```
+
+```{r}
+RidgePlot(tq_WT, features = "predicted.celltype.score", group.by = "condition")
+```
+
+```{r}
+pdf("./Fap_condition.pdf", useDingbats = FALSE, width=4.5, height=3.2)
+DotPlot(tq_WT, features = "FAP", group.by = "condition") + RotatedAxis()
+dev.off()
+```
+
+```{r} 
+library(viridis)
+owens@assays[["prediction.score.celltype"]]@counts <- owens@assays[["prediction.score.celltype"]]@data
+#breaksList = seq(0, 1, by = 1/240)
+DefaultAssay(owens) <- "prediction.score.celltype"
+Idents(owens) <- "predicted.celltype"
+sample.averageexpression <- AverageExpression(owens,  features = rownames(owens@assays[["prediction.score.celltype"]]), assays = "prediction.score.celltype", group.by = "predicted.celltype", slot = "counts")
+sample.averageexpression <- as.matrix(sample.averageexpression)[[1]]
+
+sample.averageexpression <- sample.averageexpression[c("Pericyte","SMC1","SMC2","SMC3","SMC4","FMC","CMC","Fib1","Fib2","Fib3","Fib4","Fib5","Fib6","Fib7"),]
+sample.averageexpression <- sample.averageexpression[,c("Pericyte","SMC1","SMC2","SMC3","SMC4","FMC","CMC","Fib1","Fib2","Fib7")]
+
+pheatmap(sample.averageexpression, scale="none", col=viridis(240), cexCol=0.5, cellwidth=10, cluster_rows=FALSE, fontsize_row=6, fontsize_col=6, cluster_cols = FALSE, legend = TRUE, border_color = NA, cellheight=10)
+```
+
+```{r}
+pdf("./SCM_states_Owens_mapping_heatmap.pdf", useDingbats = FALSE, width=4, height=4)
+pheatmap(sample.averageexpression, scale="none", col=viridis(240), cexCol=0.5, cellwidth=10, cluster_rows=FALSE, fontsize_row=6, fontsize_col=6, cluster_cols = FALSE, legend = TRUE, border_color = NA, cellheight=10)
+dev.off()
+```
+
+```{r}
+pdf("./mapping_ridge.pdf", useDingbats = FALSE, width=6, height=4)
+RidgePlot(mouse_coronary, features = "predicted.celltype.score", group.by = "predicted.celltype")+  scale_fill_manual(values=paletteDiscrete(unique(ref$cell.type), set = "stallion"))
+dev.off()
+```
+
+
+
+
+
+```{r}
+DotPlot(tq_WT, features = "LOX", group.by = "condition") + RotatedAxis()
+```
+
+```{r}
+genes_of_interest <- c(
+  "CD68", "SPP1", "LGALS3", "PLIN2", "MSR1", "CD36", "OLR1", "TREM2", "APOE", 
+  "LAPTM5", "CD74", "GRN", "FABP5", "AIF1", "LAMP2", "ABCA1"
+)
+```
+
+```{r}
+tq_WT <- AddModuleScore(
+  object = tq_WT,
+  features = list(genes_of_interest),
+  name = "Mac-like-SMC"
+)
+```
+
+```{r}
+pdf("./W_Athero_MacSMC_Ridge.pdf", useDingbats = FALSE, width=8, height=3)
+RidgePlot(tq_WT, features = "Mac-like-SMC1", group.by = "condition")
+dev.off()
+```
+
+```{r}
+DotPlot(tq_WT, features = c("FTL","FTH1","TFRC","CD68","LGALS3","SPP1")) + RotatedAxis()
+```
+
+```{r}
+counts_df <- AverageExpression(tq_WT, features = c("MYH11","FTL","FTH1","TFRC","LGALS3","SPP1"), group.by = "condition")$RNA
+counts_filtered_df <- counts_df[apply(counts_df, MARGIN = 1, FUN = function(x) sd(x) != 0),]
+```
+
+```{r}
+pdf("./heatmap2.pdf", useDingbats = FALSE, width=4.3, height=3)
+pheatmap(counts_filtered_df, cluster_cols = FALSE,scale = "row", border_color = NA, col=paletteContinuous("solarExtra"))
+dev.off()
+```
+
+
