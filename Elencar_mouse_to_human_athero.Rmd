@@ -1,0 +1,116 @@
+```{r}
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(ggpubr)
+library(dplyr)
+library(sctransform)
+library(pheatmap)
+library(Matrix)
+library(RColorBrewer)
+library(scales)
+library(data.table)
+library(stats)
+library(ggsci)
+library(ArchR)
+library(biomaRt)
+
+library(nichenetr)
+library(tidyverse)
+```
+
+```{r}
+sample <- readRDS("/Users/jamrute/Library/CloudStorage/Box-Box/Macbook_Files/Grad_School/Primary_Projects/Atherosclerosis/Projects/CITEseq_Atlas/analysis/final_analysis/cell_types/smc_fib/smc_fib_annotated.rds")
+```
+
+```{r}
+mydata <- readRDS("./healthy.disease.OwensLab.only.making.final.graphs15dim.new.idents.v2.rds")
+mydata <- UpdateSeuratObject(mydata)
+```
+
+```{r}
+Idents(mydata) <- "origin"
+mydata <- subset(mydata, idents = c("SMC_PDGF_WT_eYFP_Positive","tdTomato","SMC_Klf4_WT_eYFP_Positive","GFP"))
+```
+
+```{r}
+mydata
+```
+```{r}
+mouse_rna_matrix <- mydata@assays[["RNA"]]@counts
+rownames(mouse_rna_matrix) <- mouse_rna_matrix %>% rownames() %>% convert_mouse_to_human_symbols()
+```
+
+```{r}
+mouse_rna_matrix <- mouse_rna_matrix %>% .[!is.na(rownames(mouse_rna_matrix)), !is.na(colnames(mouse_rna_matrix))]
+```
+
+```{r}
+mouse_coronary_new <- CreateSeuratObject(counts = mouse_rna_matrix)
+mouse_coronary_new <- AddMetaData(object = mouse_coronary_new, metadata = mydata@meta.data)
+```
+
+```{r}
+DefaultAssay(mouse_coronary_new) <- "RNA"
+DefaultAssay(sample) <- "RNA"
+mouse_coronary_new <- subset(mouse_coronary_new, features = rownames(sample))
+```
+
+# Process the Mouse DataSet
+```{r}
+DefaultAssay(mouse_coronary_new) <- "RNA"
+mouse_coronary_new <- NormalizeData(mouse_coronary_new)
+mouse_coronary_new <- FindVariableFeatures(mouse_coronary_new, selection.method = "vst", nfeatures = 3000)
+mouse_coronary_new <- ScaleData(mouse_coronary_new)
+```
+
+# Reference Mapping
+```{r}
+human_coronary <- sample
+```
+
+```{r}
+anchors <- FindTransferAnchors(
+  reference = human_coronary,
+  query = mouse_coronary_new,
+  normalization.method = "LogNormalize",
+  reference.reduction = "spca",
+  dims = 1:50,
+  reference.assay = "RNA"
+)
+```
+
+```{r}
+mouse_coronary_new <- MapQuery(
+  anchorset = anchors,
+  query = mouse_coronary_new,
+  reference = human_coronary,
+  refdata = list(
+    celltype = "cell.state",
+    predicted_ADT = "ADT"),
+  reference.reduction = "spca", 
+  reduction.model = "rna.umap"
+)
+```
+
+```{r}
+DimPlot(mouse_coronary_new, reduction = "ref.umap", group.by = "predicted.celltype", label.size = 4,
+        cols = paletteDiscrete(unique(human_coronary$cell.state), set = "stallion"), label = FALSE)
+```
+
+```{r}
+ggplot(mouse_coronary_new@meta.data, aes(x=origin, fill=predicted.celltype)) + geom_bar(position = "fill") + theme_linedraw() + theme(axis.text.x = element_text(angle = 90)) +  scale_fill_manual(values=paletteDiscrete(unique(human_coronary$cell.state), set = "stallion")) + theme(axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()) 
+```
+
+```{r}
+saveRDS(mouse_coronary_new, "Owens_ApoE_plaque_mapped_toCITEseqHuman.rds")
+```
+
+```{r}
+RidgePlot(mouse_coronary_new, features = "predicted.celltype.score")
+```
+
+
